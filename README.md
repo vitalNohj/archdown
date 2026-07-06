@@ -1,6 +1,6 @@
 # archdown
 
-archdown is a thin, friendly CLI wrapper around Arch Linux package tooling.
+archdown is a friendly CLI wrapper around Arch Linux package tooling.
 
 Goal: make pacman/AUR workflows feel more like Homebrew without inventing a new package ecosystem.
 
@@ -10,10 +10,11 @@ Examples:
 archdown install neovim
 archdown uninstall neovim
 archdown search terminal emulator
+archdown info neovim
+archdown doctor
 archdown list
 archdown update
 archdown upgrade
-archdown refresh
 ```
 
 How it works
@@ -32,6 +33,8 @@ Implemented now:
 - install
 - uninstall
 - search
+- info
+- doctor
 - list
 - refresh
 - update
@@ -40,18 +43,23 @@ Implemented now:
 - dry-run mode
 
 Not implemented yet:
-- nicer output formatting
-- package info/details
+- parsed search rendering
 - explicit repo vs AUR display
 - install prompts/wrappers for missing helpers
-- tests
 - release automation
+
+Specs
+
+- Specs live under `openspec/`.
+- archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
+- The first detailed command target is `openspec/specs/search-command.md`.
 
 Install locally for development
 
 ```bash
 cd archdown
-python -m pip install -e .
+python -m venv .venv
+.venv/bin/pip install -e '.[dev]'
 ```
 
 Try commands safely
@@ -59,7 +67,15 @@ Try commands safely
 ```bash
 archdown --dry-run install ripgrep
 archdown --dry-run search browser
+archdown --dry-run info ripgrep
+archdown doctor
 archdown --dry-run update
+```
+
+Run tests
+
+```bash
+.venv/bin/pytest -q
 ```
 
 Design notes
@@ -67,17 +83,18 @@ Design notes
 - `update` and `upgrade` intentionally do the same thing.
 - `refresh` exists for people who explicitly want metadata sync only.
 - uninstall currently maps to `-Rns`, which is opinionated and may become configurable.
+- `doctor` is a human-readable backend explainer, not a machine interface.
+- default UX should move toward structured parsing and rendering over backend output.
 
 Roadmap ideas
 
 1. better UX and help text
-2. `archdown info <pkg>`
-3. `archdown doctor` to explain available backend tooling
-4. JSON output mode
-5. shell completions
-6. test suite
-7. packaging for AUR/PyPI
+2. richer `archdown info <pkg>` output
+3. JSON output mode
+4. shell completions
+5. test suite expansion
+6. packaging for AUR/PyPI
 
 Name availability research
 
-`archdown` is not available as a clean GitHub namespace under `vitalNohj/archdown`, but the name already appears in a few unrelated public repos. It also appears free in the Arch package search, AUR search, PyPI, npm, and crates.io at the time this repo was created. So the name is usable, but not globally unique enough to assume zero collisions.
+`archdown` already appears in a few unrelated public repositories. It also appeared free in the Arch package search, AUR search, PyPI, npm, and crates.io at the time this repo was created. So the name is usable, but not globally unique enough to assume zero collisions.

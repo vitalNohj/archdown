@@ -8,20 +8,25 @@ version = "0.1.0"
 description = "A friendly Homebrew-style wrapper over pacman/AUR helpers for Arch Linux"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
-  { name = "Nohj" }
+  { name = "archdown contributors" }
 ]
 keywords = ["arch", "pacman", "yay", "paru", "aur", "cli"]
 classifiers = [
   "Environment :: Console",
   "Intended Audience :: End Users/Desktop",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Topic :: System :: Installation/Setup",
   "Topic :: System :: Systems Administration"
+]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "pytest>=8.0",
 ]
 
 [project.scripts]
@@ -32,3 +37,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
