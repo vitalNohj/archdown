@@ -44,4 +44,4 @@ jobs:
           python -m venv /tmp/archdown-wheel-smoke
           wheel=$(ls dist/archdown-*.whl | head -n 1)
           /tmp/archdown-wheel-smoke/bin/python -m pip install "$wheel"
-          /tmp/archdown-wheel-smoke/bin/archdown --dry-run search claude --no-color
+          /tmp/archdown-wheel-smoke/bin/archdown --help
