@@ -7,7 +7,10 @@ import sys
 from dataclasses import dataclass
 from typing import Sequence
 
+from archdown.info import parse_info_output, render_package_info
+from archdown.listing import parse_list_output, render_installed_packages
 from archdown.search import parse_search_output, render_search_results
+from archdown.state import add_managed_packages, load_managed_packages, remove_managed_packages
 
 
 @dataclass(frozen=True)
@@ -75,6 +78,20 @@ def run(cmd: Sequence[str], dry_run: bool) -> int:
     return completed.returncode
 
 
+def run_install(cmd: Sequence[str], packages: Sequence[str], dry_run: bool) -> int:
+    code = run(cmd, dry_run)
+    if code == 0 and not dry_run:
+        add_managed_packages(packages)
+    return code
+
+
+def run_uninstall(cmd: Sequence[str], packages: Sequence[str], dry_run: bool) -> int:
+    code = run(cmd, dry_run)
+    if code == 0 and not dry_run:
+        remove_managed_packages(packages)
+    return code
+
+
 def run_search(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | None) -> int:
     pretty = " ".join(cmd)
     if dry_run:
@@ -97,6 +114,91 @@ def run_search(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | No
         if completed.stderr:
             print(completed.stderr, end="", file=sys.stderr)
     return completed.returncode
+
+
+def run_list(
+    cmd: Sequence[str],
+    *,
+    dry_run: bool,
+    raw: bool,
+    color: bool | None,
+    sort: str,
+    group: str,
+    columns: int,
+) -> int:
+    pretty = " ".join(cmd)
+    if dry_run:
+        print(f"backend command: {pretty}")
+        return 0
+
+    completed = subprocess.run(list(cmd), capture_output=True, text=True)
+    output = completed.stdout
+    if raw:
+        print(output, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+        return completed.returncode
+
+    packages = parse_list_output(output)
+    managed = load_managed_packages()
+    print(
+        render_installed_packages(
+            packages,
+            color=color,
+            columns=columns,
+            managed=managed,
+            group_managed=group == "managed",
+            sort=sort,
+        )
+    )
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    return completed.returncode
+
+
+def run_info(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | None) -> int:
+    pretty = " ".join(cmd)
+    if dry_run:
+        print(f"backend command: {pretty}")
+        return 0
+
+    completed = subprocess.run(list(cmd), capture_output=True, text=True)
+    output = completed.stdout
+    if raw:
+        print(output, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+        return completed.returncode
+
+    info = parse_info_output(output)
+    print(render_package_info(info, color=color))
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    return completed.returncode
+
+
+def run_adopt(cmd: Sequence[str], *, packages: Sequence[str], from_current: bool, dry_run: bool) -> int:
+    if not packages and not from_current:
+        raise SystemExit("adopt requires package names or --from-current")
+
+    adopted = list(packages)
+    if from_current:
+        completed = subprocess.run(list(cmd), capture_output=True, text=True)
+        if completed.returncode != 0:
+            if completed.stderr:
+                print(completed.stderr, end="", file=sys.stderr)
+            return completed.returncode
+        adopted.extend(package.name for package in parse_list_output(completed.stdout))
+
+    adopted = sorted({package for package in adopted if package})
+    if dry_run:
+        print("would adopt:")
+    else:
+        add_managed_packages(adopted)
+        print("adopted:")
+    for package in adopted:
+        print(f"- {package}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -122,8 +224,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     info = sub.add_parser("info", help="Show package details from the active backend")
     info.add_argument("package", help="Package name")
+    info.add_argument("--raw", action="store_true", help="Show raw backend output")
+    info.add_argument("--no-color", action="store_true", help="Disable colored output")
 
-    sub.add_parser("list", help="List explicitly installed packages")
+    listing = sub.add_parser("list", help="List explicitly installed packages")
+    listing.add_argument("--raw", action="store_true", help="Show raw backend output")
+    listing.add_argument("--no-color", action="store_true", help="Disable colored output")
+    listing.add_argument("--sort", choices=["name", "version", "managed", "none"], default="name", help="Sort list output")
+    listing.add_argument("--group", choices=["type", "managed"], default="type", help="Group list output")
+    listing.add_argument("--columns", type=int, default=3, help="Number of list columns")
+    adopt = sub.add_parser("adopt", help="Mark existing packages as managed by archdown")
+    adopt.add_argument("packages", nargs="*", help="Package names to adopt")
+    adopt.add_argument("--from-current", action="store_true", help="Adopt every currently listed explicit package")
+    adopt.add_argument("--dry-run", action="store_true", help="Preview what would be adopted without writing state")
+
     sub.add_parser("refresh", help="Refresh package databases only")
     sub.add_parser("upgrade", help="Upgrade the full system")
     sub.add_parser("update", help="Alias for upgrade; safer than Homebrew-style split semantics on Arch")
@@ -161,15 +275,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     backend = select_backend(args.backend)
 
     if args.command == "install":
-        return run([*backend.install, *args.packages], args.dry_run)
+        return run_install([*backend.install, *args.packages], args.packages, args.dry_run)
     if args.command == "uninstall":
-        return run([*backend.uninstall, *args.packages], args.dry_run)
+        return run_uninstall([*backend.uninstall, *args.packages], args.packages, args.dry_run)
     if args.command == "search":
         return run_search([*backend.search, *args.query], dry_run=args.dry_run, raw=args.raw, color=False if args.no_color else None)
     if args.command == "info":
-        return run([*backend.info, args.package], args.dry_run)
+        return run_info([*backend.info, args.package], dry_run=args.dry_run, raw=args.raw, color=False if args.no_color else None)
     if args.command == "list":
-        return run(backend.list_installed, args.dry_run)
+        return run_list(
+            backend.list_installed,
+            dry_run=args.dry_run,
+            raw=args.raw,
+            color=False if args.no_color else None,
+            sort=args.sort,
+            group=args.group,
+            columns=args.columns,
+        )
     if args.command == "refresh":
         print("warning: refresh only syncs databases. On Arch, full upgrades are usually safer.", file=sys.stderr)
         return run(backend.refresh, args.dry_run)
@@ -178,6 +300,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "doctor":
         print_doctor(backend)
         return 0
+    if args.command == "adopt":
+        return run_adopt(backend.list_installed, packages=args.packages, from_current=args.from_current, dry_run=args.dry_run)
 
     parser.error("unknown command")
     return 2

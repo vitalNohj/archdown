@@ -57,9 +57,11 @@ def test_select_backend_errors_when_no_backend_exists(monkeypatch):
 
 def test_parser_accepts_info_doctor_and_search_options():
     parser = build_parser()
-    parsed = parser.parse_args(["info", "ripgrep"])
+    parsed = parser.parse_args(["info", "ripgrep", "--raw", "--no-color"])
     assert parsed.command == "info"
     assert parsed.package == "ripgrep"
+    assert parsed.raw is True
+    assert parsed.no_color is True
 
     parsed = parser.parse_args(["doctor"])
     assert parsed.command == "doctor"
@@ -69,6 +71,23 @@ def test_parser_accepts_info_doctor_and_search_options():
     assert parsed.query == ["claude"]
     assert parsed.raw is True
     assert parsed.no_color is True
+
+    parsed = parser.parse_args(["list", "--raw", "--no-color", "--sort", "managed", "--group", "managed", "--columns", "4"])
+    assert parsed.command == "list"
+    assert parsed.raw is True
+    assert parsed.no_color is True
+    assert parsed.sort == "managed"
+    assert parsed.group == "managed"
+    assert parsed.columns == 4
+
+    parsed = parser.parse_args(["adopt", "ripgrep", "fd", "--dry-run"])
+    assert parsed.command == "adopt"
+    assert parsed.packages == ["ripgrep", "fd"]
+    assert parsed.dry_run is True
+
+    parsed = parser.parse_args(["adopt", "--from-current"])
+    assert parsed.command == "adopt"
+    assert parsed.from_current is True
 
 
 def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
