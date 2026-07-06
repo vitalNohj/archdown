@@ -4,6 +4,12 @@ archdown is a friendly CLI wrapper around Arch Linux package tooling.
 
 Goal: make pacman/AUR workflows feel more like Homebrew without inventing a new package ecosystem.
 
+Why this exists
+
+I built archdown for my own Arch Linux setup. I regularly bounce between Debian-based distros, a MacBook with Homebrew, and Arch. I wanted Arch to feel just as approachable day-to-day without giving up the power of `pacman`, `yay`, and the AUR.
+
+archdown is meant to be that missing comfort layer: familiar verbs like `install`, `uninstall`, `search`, and `update`, backed by the real Arch ecosystem instead of a separate repository or package manager.
+
 Examples:
 
 ```bash
