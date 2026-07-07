@@ -15,6 +15,7 @@ visual-studio-code-bin 1.102.0-1
 bluez-utils 5.87-2
 alacritty 0.17.0-1
 jq 1.8.1-1
+herdr 0.7.1-1
 """
 
 
@@ -41,14 +42,70 @@ def test_classify_package_separates_apps_from_utilities():
 def test_render_installed_packages_groups_and_uses_three_columns_without_color():
     output = render_installed_packages(parse_list_output(LIST_OUTPUT), color=False, columns=3)
     assert "Applications" in output
-    assert "Utilities / system packages" in output
+    assert "Libraries" in output
     assert "firefox" in output
     assert "152.0.4-1" in output
     assert "ripgrep" in output
     assert "14.1.1-1" in output
-    assert "firefox" in output.split("Utilities / system packages")[0]
-    assert "ripgrep" in output.split("Utilities / system packages")[1]
+    assert "ripgrep" in output.split("Applications")[0]
+    assert "firefox" in output.split("Applications")[1]
     assert "\033[" not in output
+
+
+def test_render_installed_packages_puts_libraries_before_applications_and_repeats_labels():
+    output = render_installed_packages(parse_list_output(LIST_OUTPUT), color=False, columns=3)
+    lines = output.splitlines()
+
+    assert lines.index("Libraries") < lines.index("Applications")
+    assert output.count("Libraries") == 2
+    assert output.count("Applications") == 2
+    assert lines[0] == "Libraries"
+    assert lines[-1] == "Applications"
+    assert "ripgrep" in output.split("Applications")[0]
+    assert "firefox" in output.split("Applications")[1]
+
+
+def test_render_installed_packages_can_show_user_installed_section_with_adopt_hint():
+    output = render_installed_packages(
+        parse_list_output(LIST_OUTPUT),
+        color=False,
+        columns=3,
+        managed={"herdr"},
+    )
+    lines = output.splitlines()
+
+    assert lines.index("Libraries") < lines.index("Applications") < lines.index("User installed")
+    assert "herdr" in output.split("User installed")[1]
+    assert "adopt" in output
+    assert "archdown adopt <package>" in output
+    assert output.count("User installed") == 2
+    assert lines[-1] == "User installed"
+
+
+def test_render_installed_packages_marks_recently_updated_managed_packages_without_color():
+    output = render_installed_packages(
+        parse_list_output(LIST_OUTPUT),
+        color=False,
+        columns=3,
+        managed={"herdr"},
+        recent_updates={"herdr": ("0.7.0-1", "0.7.1-1")},
+    )
+
+    assert "herdr (Recently Updated 0.7.0-1 -> 0.7.1-1)" in output
+    assert "\033[" not in output
+
+
+def test_render_installed_packages_marks_recently_updated_managed_packages_with_green_color():
+    output = render_installed_packages(
+        parse_list_output(LIST_OUTPUT),
+        color=True,
+        columns=3,
+        managed={"herdr"},
+        recent_updates={"herdr": ("0.7.0-1", "0.7.1-1")},
+    )
+
+    assert "herdr" in output
+    assert "\033[38;5;83m(Recently Updated 0.7.0-1 -> 0.7.1-1)\033[0m" in output
 
 
 def test_render_installed_packages_puts_name_and_version_on_separate_rows():
@@ -119,3 +176,17 @@ def test_render_installed_packages_can_separate_archdown_managed_packages():
     assert "firefox" in output.split("Other installed packages")[0]
     assert "ripgrep" in output.split("Other installed packages")[0]
     assert "base-devel" in output.split("Other installed packages")[1]
+
+
+def test_render_installed_packages_marks_recently_updated_packages_in_managed_group():
+    output = render_installed_packages(
+        parse_list_output(LIST_OUTPUT),
+        color=False,
+        columns=3,
+        managed={"herdr"},
+        group_managed=True,
+        recent_updates={"herdr": ("0.7.0-1", "0.7.1-1")},
+    )
+
+    assert "Installed with archdown" in output
+    assert "herdr (Recently Updated 0.7.0-1 -> 0.7.1-1)" in output.split("Other installed packages")[0]

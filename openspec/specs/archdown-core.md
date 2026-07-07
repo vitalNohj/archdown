@@ -29,6 +29,7 @@ archdown is a user-friendly CLI wrapper for Arch package workflows. It is not a 
 - Commands should feel consistent and predictable across supported backends.
 - User-visible wording should reflect archdown behavior, not leak backend quirks unless needed.
 - `search` should optimize for quick scanning, while `info` should carry fuller package detail.
+- `list` should render structured installed-package views and may update archdown-managed package metadata as part of that structured render.
 
 ## Fallback behavior
 

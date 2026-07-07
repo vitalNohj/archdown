@@ -6,7 +6,7 @@ Goal: make pacman/AUR workflows feel more like Homebrew without inventing a new 
 
 Why this exists
 
-I built archdown for my own Arch Linux setup. I regularly bounce between Debian-based distros, a MacBook with Homebrew, and Arch. I wanted Arch to feel just as approachable day-to-day without giving up the power of `pacman`, `yay`, and the AUR.
+Arch users often bounce between Debian-based distros, macOS systems with Homebrew, and Arch. archdown aims to make Arch feel just as approachable day-to-day without giving up the power of `pacman`, `yay`, and the AUR.
 
 archdown is meant to be that missing comfort layer: familiar verbs like `install`, `uninstall`, `search`, and `update`, backed by the real Arch ecosystem instead of a separate repository or package manager.
 
@@ -19,6 +19,8 @@ archdown search terminal emulator
 archdown info neovim
 archdown doctor
 archdown list
+archdown list --group managed
+archdown adopt herdr
 archdown update
 archdown upgrade
 ```
@@ -41,7 +43,9 @@ Implemented now:
 - search
 - info
 - doctor
-- list
+- list with structured Libraries / Applications / User installed sections
+- adopt existing packages into archdown's managed package state
+- recently-updated markers for tracked packages after external upgrades
 - refresh
 - update
 - upgrade
@@ -49,8 +53,6 @@ Implemented now:
 - dry-run mode
 
 Not implemented yet:
-- parsed search rendering
-- explicit repo vs AUR display
 - install prompts/wrappers for missing helpers
 - release automation
 
@@ -58,7 +60,7 @@ Specs
 
 - Specs live under `openspec/`.
 - archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
-- The first detailed command target is `openspec/specs/search-command.md`.
+- Current command specs include `openspec/specs/search-command.md` and `openspec/specs/list-command.md`.
 
 Install locally for development
 
@@ -78,6 +80,20 @@ archdown doctor
 archdown --dry-run update
 ```
 
+Managed packages and recent updates
+
+- `archdown install <pkg>` records the package as managed by archdown after a successful install.
+- `archdown adopt <pkg>` marks an already-installed package as managed by archdown.
+- `archdown list` stores the last seen installed version for managed packages.
+- If a managed package changes version outside archdown, the next structured `archdown list` marks it inline:
+
+```text
+herdr (Recently Updated 0.7.0-1 -> 0.7.1-1)
+v 0.7.1-1
+```
+
+- `archdown list --raw` stays a backend passthrough and does not update archdown's managed version state.
+
 Run tests
 
 ```bash
@@ -91,6 +107,9 @@ Design notes
 - uninstall currently maps to `-Rns`, which is opinionated and may become configurable.
 - `doctor` is a human-readable backend explainer, not a machine interface.
 - default UX should move toward structured parsing and rendering over backend output.
+- `list` separates package browsing into Homebrew-inspired sections: Libraries, Applications, and User installed.
+- `User installed` means packages tracked by archdown, either installed through `archdown install` or adopted with `archdown adopt`.
+- Structured `list` uses tracked packages to surface version changes caused by external tools like `yay` or `pacman`.
 
 Roadmap ideas
 

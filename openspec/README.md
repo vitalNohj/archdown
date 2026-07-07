@@ -9,6 +9,12 @@ This directory holds behavior specs for archdown.
 - Backend tools such as `yay`, `paru`, and `pacman` are implementation details.
 - archdown should prefer a clearer parsed UX over raw backend output.
 
+## Specs
+
+- `specs/archdown-core.md` - cross-command product and backend principles.
+- `specs/search-command.md` - structured search behavior.
+- `specs/list-command.md` - structured list behavior, managed package version tracking, and recently-updated tags.
+
 ## Workflow
 
 1. Update or add a spec.

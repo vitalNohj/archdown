@@ -97,6 +97,7 @@ def render_installed_packages(
     color: bool | None = None,
     columns: int = 3,
     managed: set[str] | None = None,
+    recent_updates: dict[str, tuple[str, str]] | None = None,
     group_managed: bool = False,
     sort: Literal["name", "version", "managed", "none"] = "name",
 ) -> str:
@@ -107,42 +108,88 @@ def render_installed_packages(
     use_color = should_color() if color is None else color
     safe_columns = max(1, columns)
     managed_names = managed or set()
+    update_markers = recent_updates or {}
 
     if group_managed:
         managed_rows = [row for row in rows if row.name in managed_names]
         other_rows = [row for row in rows if row.name not in managed_names]
         sections: list[str] = []
         if managed_rows:
-            sections.extend(_render_package_grid("Installed with archdown", managed_rows, safe_columns, use_color))
+            sections.extend(_render_package_grid("Installed with archdown", managed_rows, safe_columns, use_color, recent_updates=update_markers))
         if other_rows:
             if sections:
                 sections.append("")
             sections.extend(_render_package_grid("Other installed packages", other_rows, safe_columns, use_color))
         return "\n".join(sections)
 
-    applications = [row for row in rows if classify_package(row) == "applications"]
-    utilities = [row for row in rows if classify_package(row) == "utilities"]
+    user_installed = [row for row in rows if row.name in managed_names]
+    untracked_rows = [row for row in rows if row.name not in managed_names]
+    applications = [row for row in untracked_rows if classify_package(row) == "applications"]
+    libraries = [row for row in untracked_rows if classify_package(row) == "utilities"]
 
     sections = []
+    if libraries:
+        sections.extend(_render_package_grid("Libraries", libraries, safe_columns, use_color))
     if applications:
-        sections.extend(_render_package_grid("Applications", applications, safe_columns, use_color))
-    if utilities:
         if sections:
             sections.append("")
-        sections.extend(_render_package_grid("Utilities / system packages", utilities, safe_columns, use_color))
+        sections.extend(_render_package_grid("Applications", applications, safe_columns, use_color))
+    if user_installed:
+        if sections:
+            sections.append("")
+        sections.extend(
+            _render_package_grid(
+                "User installed",
+                user_installed,
+                safe_columns,
+                use_color,
+                recent_updates=update_markers,
+                note="Packages tracked by archdown. Use `archdown adopt <package>` to track existing installs.",
+            )
+        )
     return "\n".join(sections)
 
 
-def _render_package_grid(title: str, rows: list[InstalledPackage], columns: int, color: bool) -> list[str]:
-    cell_width = 22
+def _render_package_grid(
+    title: str,
+    rows: list[InstalledPackage],
+    columns: int,
+    color: bool,
+    *,
+    recent_updates: dict[str, tuple[str, str]] | None = None,
+    note: str = "",
+) -> list[str]:
+    cell_width = max(22, *(len(_format_package_name(row, recent_updates or {}, False)) for row in rows))
     lines = [_paint(title, "header", color), _paint("-" * len(title), "muted", color)]
+    if note:
+        lines.append(_paint(note, "muted", color))
     for index in range(0, len(rows), columns):
         chunk = rows[index : index + columns]
         name_cells = []
         version_cells = []
         for row in chunk:
-            name_cells.append(_paint(_trim(row.name, cell_width).ljust(cell_width), "name", color))
+            name_cells.append(_format_name_cell(row, recent_updates or {}, cell_width, color))
             version_cells.append(_paint(_trim(f"v {row.version}", cell_width).ljust(cell_width), "official", color))
         lines.append("  ".join(name_cells).rstrip())
         lines.append("  ".join(version_cells).rstrip())
+    lines.append(_paint("-" * len(title), "muted", color))
+    lines.append(_paint(title, "header", color))
     return lines
+
+
+def _format_package_name(row: InstalledPackage, recent_updates: dict[str, tuple[str, str]], color: bool) -> str:
+    if row.name not in recent_updates:
+        return row.name
+    old, new = recent_updates[row.name]
+    marker = _paint(f"(Recently Updated {old} -> {new})", "installed", color)
+    return f"{row.name} {marker}"
+
+
+def _format_name_cell(row: InstalledPackage, recent_updates: dict[str, tuple[str, str]], width: int, color: bool) -> str:
+    if row.name not in recent_updates:
+        return _paint(_trim(row.name, width).ljust(width), "name", color)
+    uncolored = _format_package_name(row, recent_updates, False)
+    padding = " " * max(0, width - len(uncolored))
+    old, new = recent_updates[row.name]
+    marker = _paint(f"(Recently Updated {old} -> {new})", "installed", color)
+    return f"{_paint(row.name, 'name', color)} {marker}{padding}"

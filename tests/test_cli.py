@@ -1,6 +1,9 @@
+import json
+import subprocess
+
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, select_backend
+from archdown.cli import build_parser, make_backend, print_doctor, run_list, select_backend
 
 
 def test_make_backend_yay_mapping():
@@ -100,3 +103,22 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- yay: found" in out
     assert "- pacman: found" in out
     assert "- info: yay -Si <pkg>" in out
+
+
+def test_run_list_tracks_managed_version_changes_and_leaves_raw_mode_unchanged(monkeypatch, tmp_path, capsys):
+    state_path = tmp_path / "archdown" / "managed-packages.json"
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"packages": ["ripgrep"], "versions": {"ripgrep": "14.1.1-1"}}))
+    backend_output = "ripgrep 14.2.0-1\nfd 10.3.0-1\n"
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, backend_output, ""))
+
+    assert run_list(["pacman", "-Qe"], dry_run=False, raw=False, color=False, sort="name", group="type", columns=3) == 0
+
+    out = capsys.readouterr().out
+    assert "ripgrep (Recently Updated 14.1.1-1 -> 14.2.0-1)" in out
+    assert json.loads(state_path.read_text())["versions"] == {"ripgrep": "14.2.0-1"}
+
+    assert run_list(["pacman", "-Qe"], dry_run=False, raw=True, color=False, sort="name", group="type", columns=3) == 0
+    assert capsys.readouterr().out == backend_output

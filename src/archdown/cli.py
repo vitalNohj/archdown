@@ -10,7 +10,7 @@ from typing import Sequence
 from archdown.info import parse_info_output, render_package_info
 from archdown.listing import parse_list_output, render_installed_packages
 from archdown.search import parse_search_output, render_search_results
-from archdown.state import add_managed_packages, load_managed_packages, remove_managed_packages
+from archdown.state import add_managed_packages, load_managed_packages, remove_managed_packages, update_managed_package_versions
 
 
 @dataclass(frozen=True)
@@ -141,12 +141,14 @@ def run_list(
 
     packages = parse_list_output(output)
     managed = load_managed_packages()
+    recent_updates = update_managed_package_versions({package.name: package.version for package in packages}, managed)
     print(
         render_installed_packages(
             packages,
             color=color,
             columns=columns,
             managed=managed,
+            recent_updates=recent_updates,
             group_managed=group == "managed",
             sort=sort,
         )
