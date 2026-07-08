@@ -18,6 +18,7 @@ archdown uninstall neovim
 archdown search terminal emulator
 archdown info neovim
 archdown which rg
+archdown uses openssl
 archdown doctor
 archdown list
 archdown list --group managed
@@ -46,6 +47,7 @@ Implemented now:
 - search
 - info
 - which (read-only lookup of which package owns a command or file)
+- uses (read-only lookup of what still depends on a package)
 - doctor
 - list with structured Libraries / Applications / User installed sections
 - adopt existing packages into archdown's managed package state
@@ -66,7 +68,7 @@ Specs
 
 - Specs live under `openspec/`.
 - archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
-- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, `openspec/specs/cleanup-command.md`, and `openspec/specs/which-command.md`.
+- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, `openspec/specs/cleanup-command.md`, `openspec/specs/which-command.md`, and `openspec/specs/uses-command.md`.
 
 Install locally for development
 
@@ -83,6 +85,7 @@ archdown --dry-run install ripgrep
 archdown --dry-run search browser
 archdown --dry-run info ripgrep
 archdown which rg
+archdown uses openssl
 archdown doctor
 archdown outdated
 archdown --dry-run cleanup
