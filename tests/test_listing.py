@@ -1,10 +1,42 @@
 from archdown.listing import (
     InstalledPackage,
+    OutdatedPackage,
     classify_package,
     parse_list_output,
+    parse_outdated_output,
     render_installed_packages,
+    render_outdated_packages,
     sort_packages,
 )
+
+
+OUTDATED_OUTPUT = """ripgrep 14.1.1-1 -> 14.2.0-1
+fd 10.2.0-1 -> 10.3.0-1
+"""
+
+
+def test_parse_outdated_output_extracts_version_transitions():
+    packages = parse_outdated_output(OUTDATED_OUTPUT)
+    assert packages == [
+        OutdatedPackage("ripgrep", "14.1.1-1", "14.2.0-1"),
+        OutdatedPackage("fd", "10.2.0-1", "10.3.0-1"),
+    ]
+
+
+def test_parse_outdated_output_ignores_lines_without_transition():
+    packages = parse_outdated_output(":: Synchronizing package databases...\nripgrep 14.1.1-1 -> 14.2.0-1\n\n")
+    assert packages == [OutdatedPackage("ripgrep", "14.1.1-1", "14.2.0-1")]
+
+
+def test_render_outdated_packages_shows_aligned_transitions():
+    output = render_outdated_packages(parse_outdated_output(OUTDATED_OUTPUT), color=False)
+    assert "Outdated packages" in output
+    assert "ripgrep  14.1.1-1 -> 14.2.0-1" in output
+    assert "fd       10.2.0-1 -> 10.3.0-1" in output
+
+
+def test_render_outdated_packages_empty_message():
+    assert render_outdated_packages([], color=False) == "Everything is up to date."
 
 
 LIST_OUTPUT = """firefox 152.0.4-1

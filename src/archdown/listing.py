@@ -59,6 +59,47 @@ class InstalledPackage:
     version: str
 
 
+@dataclass(frozen=True)
+class OutdatedPackage:
+    name: str
+    current_version: str
+    new_version: str
+
+
+def parse_outdated_output(output: str) -> list[OutdatedPackage]:
+    packages: list[OutdatedPackage] = []
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if " -> " not in line:
+            continue
+        left, right = line.split(" -> ", 1)
+        left_parts = left.split()
+        right_parts = right.split()
+        if len(left_parts) < 2 or not right_parts:
+            continue
+        packages.append(OutdatedPackage(left_parts[0], left_parts[1], right_parts[0]))
+    return packages
+
+
+def render_outdated_packages(packages: Iterable[OutdatedPackage], *, color: bool | None = None) -> str:
+    rows = list(packages)
+    if not rows:
+        return "Everything is up to date."
+
+    use_color = should_color() if color is None else color
+    title = "Outdated packages"
+    name_width = max(len(row.name) for row in rows)
+    current_width = max(len(row.current_version) for row in rows)
+
+    lines = [_paint(title, "header", use_color), _paint("-" * len(title), "muted", use_color)]
+    for row in rows:
+        name = _paint(row.name.ljust(name_width), "name", use_color)
+        current = _paint(row.current_version.ljust(current_width), "muted", use_color)
+        new = _paint(row.new_version, "installed", use_color)
+        lines.append(f"{name}  {current} -> {new}")
+    return "\n".join(lines)
+
+
 def parse_list_output(output: str) -> list[InstalledPackage]:
     packages: list[InstalledPackage] = []
     for raw_line in output.splitlines():
