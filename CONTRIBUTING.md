@@ -22,6 +22,7 @@ Current commands:
 - search
 - info
 - list
+- outdated
 - refresh
 - update
 - upgrade
