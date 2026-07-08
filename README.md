@@ -22,6 +22,7 @@ archdown list
 archdown list --group managed
 archdown adopt herdr
 archdown outdated
+archdown cleanup
 archdown update
 archdown upgrade
 ```

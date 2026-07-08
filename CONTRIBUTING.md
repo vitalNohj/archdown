@@ -23,6 +23,7 @@ Current commands:
 - info
 - list
 - outdated
+- cleanup
 - refresh
 - update
 - upgrade
