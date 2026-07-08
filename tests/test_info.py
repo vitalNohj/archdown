@@ -39,6 +39,12 @@ def test_render_package_info_prioritizes_main_fields_without_color():
     assert "\033[" not in output
 
 
+def test_parse_info_output_empty_is_flagged_empty():
+    info = parse_info_output("")
+    assert info.is_empty is True
+    assert parse_info_output(INFO_OUTPUT).is_empty is False
+
+
 def test_render_package_info_supports_color():
     output = render_package_info(PackageInfo(name="ripgrep", version="14.1.1-1", repository="extra", description="grep"), color=True)
     assert "\033[" in output

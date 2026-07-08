@@ -31,6 +31,12 @@ archdown is a user-friendly CLI wrapper for Arch package workflows. It is not a 
 - `search` should optimize for quick scanning, while `info` should carry fuller package detail.
 - `list` should render structured installed-package views and may update archdown-managed package metadata as part of that structured render.
 
+## Empty and missing states
+
+- When a command has nothing to show, it should print a clear one-line message rather than blank or placeholder output.
+- `search` with no matches prints "No packages found."; `info` for a package the backend does not know prints "No package found." instead of an empty detail block.
+- Friendly empty/missing output is a display concern only: backend exit codes are preserved so callers and scripts still see the real success/failure.
+
 ## Fallback behavior
 
 - If structured parsing is unavailable or fails, archdown should degrade gracefully.
