@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from archdown.info import parse_info_output, render_package_info
-from archdown.listing import parse_list_output, render_installed_packages
+from archdown.listing import parse_list_output, parse_outdated_output, render_installed_packages, render_outdated_packages
 from archdown.search import parse_search_output, render_search_results
 from archdown.state import add_managed_packages, load_managed_packages, remove_managed_packages, update_managed_package_versions
 
@@ -23,6 +23,7 @@ class Backend:
     refresh: list[str]
     upgrade: list[str]
     info: list[str]
+    outdated: list[str]
 
 
 def make_backend(name: str) -> Backend:
@@ -36,6 +37,7 @@ def make_backend(name: str) -> Backend:
             ["paru", "-Sy"],
             ["paru", "-Syu"],
             ["paru", "-Si"],
+            ["paru", "-Qu"],
         )
     if name == "yay":
         return Backend(
@@ -47,6 +49,7 @@ def make_backend(name: str) -> Backend:
             ["yay", "-Sy"],
             ["yay", "-Syu"],
             ["yay", "-Si"],
+            ["yay", "-Qu"],
         )
     if name == "pacman":
         return Backend(
@@ -58,6 +61,7 @@ def make_backend(name: str) -> Backend:
             ["sudo", "pacman", "-Sy"],
             ["sudo", "pacman", "-Syu"],
             ["pacman", "-Si"],
+            ["pacman", "-Qu"],
         )
     raise AssertionError(f"Unknown backend: {name}")
 
@@ -158,6 +162,63 @@ def run_list(
     return completed.returncode
 
 
+def resolve_outdated_command(backend: Backend) -> list[str]:
+    # `checkupdates` (from pacman-contrib) is the safe repo update check for the
+    # plain pacman backend: it works against a private database copy and never
+    # touches the user's real db. paru/yay keep their own `-Qu` query because it
+    # also reports AUR upgrades against the already-synced db.
+    if backend.name == "pacman" and shutil.which("checkupdates"):
+        return ["checkupdates"]
+    return list(backend.outdated)
+
+
+def _surface_outdated_failure(completed: subprocess.CompletedProcess[str]) -> int:
+    print("archdown: could not check for outdated packages", file=sys.stderr)
+    if completed.stdout.strip():
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    return completed.returncode
+
+
+def run_outdated(cmd: Sequence[str], *, dry_run: bool) -> int:
+    pretty = " ".join(cmd)
+    if dry_run:
+        print(f"backend command: {pretty}")
+        return 0
+
+    completed = subprocess.run(list(cmd), capture_output=True, text=True)
+    output = completed.stdout
+
+    if cmd[0] == "checkupdates":
+        # checkupdates exit codes: 0 => updates available, 2 => nothing to
+        # upgrade, anything else => a real failure.
+        if completed.returncode == 2:
+            print(render_outdated_packages([], color=None))
+            return 0
+        if completed.returncode != 0:
+            return _surface_outdated_failure(completed)
+        packages = parse_outdated_output(output)
+        if packages:
+            print(render_outdated_packages(packages, color=None))
+        elif output.strip():
+            print(output, end="")
+        else:
+            print(render_outdated_packages([], color=None))
+        return 0
+
+    packages = parse_outdated_output(output)
+    if packages:
+        print(render_outdated_packages(packages, color=None))
+        return 0
+    if output.strip():
+        return _surface_outdated_failure(completed)
+    if completed.returncode in (0, 1) and not completed.stderr:
+        print(render_outdated_packages([], color=None))
+        return 0
+    return _surface_outdated_failure(completed)
+
+
 def run_info(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | None) -> int:
     pretty = " ".join(cmd)
     if dry_run:
@@ -240,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     adopt.add_argument("--from-current", action="store_true", help="Adopt every currently listed explicit package")
     adopt.add_argument("--dry-run", action="store_true", help="Preview what would be adopted without writing state")
 
+    sub.add_parser("outdated", help="List packages with an available upgrade (read-only; does not sync or upgrade)")
     sub.add_parser("refresh", help="Refresh package databases only")
     sub.add_parser("upgrade", help="Upgrade the full system")
     sub.add_parser("update", help="Alias for upgrade; safer than Homebrew-style split semantics on Arch")
@@ -267,6 +329,7 @@ def print_doctor(backend: Backend) -> None:
     print(f"- search: {' '.join(backend.search)} <query...>")
     print(f"- info: {' '.join(backend.info)} <pkg>")
     print(f"- list: {' '.join(backend.list_installed)}")
+    print(f"- outdated: {' '.join(resolve_outdated_command(backend))}")
     print(f"- refresh: {' '.join(backend.refresh)}")
     print(f"- upgrade/update: {' '.join(backend.upgrade)}")
 
@@ -294,6 +357,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             group=args.group,
             columns=args.columns,
         )
+    if args.command == "outdated":
+        return run_outdated(resolve_outdated_command(backend), dry_run=args.dry_run)
     if args.command == "refresh":
         print("warning: refresh only syncs databases. On Arch, full upgrades are usually safer.", file=sys.stderr)
         return run(backend.refresh, args.dry_run)

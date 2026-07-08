@@ -14,6 +14,7 @@ This directory holds behavior specs for archdown.
 - `specs/archdown-core.md` - cross-command product and backend principles.
 - `specs/search-command.md` - structured search behavior.
 - `specs/list-command.md` - structured list behavior, managed package version tracking, and recently-updated tags.
+- `specs/outdated-command.md` - read-only structured listing of packages with an available upgrade.
 
 ## Workflow
 

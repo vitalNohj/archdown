@@ -21,6 +21,7 @@ archdown doctor
 archdown list
 archdown list --group managed
 archdown adopt herdr
+archdown outdated
 archdown update
 archdown upgrade
 ```
@@ -46,6 +47,7 @@ Implemented now:
 - list with structured Libraries / Applications / User installed sections
 - adopt existing packages into archdown's managed package state
 - recently-updated markers for tracked packages after external upgrades
+- outdated (read-only structured list of packages with an available upgrade; never syncs or upgrades)
 - refresh
 - update
 - upgrade
@@ -60,7 +62,7 @@ Specs
 
 - Specs live under `openspec/`.
 - archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
-- Current command specs include `openspec/specs/search-command.md` and `openspec/specs/list-command.md`.
+- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, and `openspec/specs/outdated-command.md`.
 
 Install locally for development
 
@@ -77,6 +79,7 @@ archdown --dry-run install ripgrep
 archdown --dry-run search browser
 archdown --dry-run info ripgrep
 archdown doctor
+archdown outdated
 archdown --dry-run update
 ```
 

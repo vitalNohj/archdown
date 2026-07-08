@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, run_list, select_backend
+from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_list, run_outdated, select_backend
 
 
 def test_make_backend_yay_mapping():
@@ -15,6 +15,7 @@ def test_make_backend_yay_mapping():
     assert backend.refresh == ["yay", "-Sy"]
     assert backend.upgrade == ["yay", "-Syu"]
     assert backend.info == ["yay", "-Si"]
+    assert backend.outdated == ["yay", "-Qu"]
 
 
 def test_make_backend_pacman_mapping():
@@ -26,6 +27,7 @@ def test_make_backend_pacman_mapping():
     assert backend.refresh == ["sudo", "pacman", "-Sy"]
     assert backend.upgrade == ["sudo", "pacman", "-Syu"]
     assert backend.info == ["pacman", "-Si"]
+    assert backend.outdated == ["pacman", "-Qu"]
 
 
 def test_select_backend_auto_prefers_paru(monkeypatch):
@@ -91,6 +93,96 @@ def test_parser_accepts_info_doctor_and_search_options():
     parsed = parser.parse_args(["adopt", "--from-current"])
     assert parsed.command == "adopt"
     assert parsed.from_current is True
+
+    parsed = parser.parse_args(["outdated"])
+    assert parsed.command == "outdated"
+
+
+def test_outdated_subparser_rejects_flags_and_positionals():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["outdated", "ripgrep"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["outdated", "--raw"])
+
+
+def test_resolve_outdated_command_prefers_checkupdates_only_for_pacman(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name == "checkupdates" else None)
+    assert resolve_outdated_command(make_backend("pacman")) == ["checkupdates"]
+    assert resolve_outdated_command(make_backend("yay")) == ["yay", "-Qu"]
+
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    assert resolve_outdated_command(make_backend("pacman")) == ["pacman", "-Qu"]
+
+
+def test_run_outdated_renders_transitions(monkeypatch, capsys):
+    output = "ripgrep 14.1.1-1 -> 14.2.0-1\nfd 10.2.0-1 -> 10.3.0-1\n"
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, output, ""))
+
+    assert run_outdated(["pacman", "-Qu"], dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "Outdated packages" in out
+    assert "ripgrep" in out
+    assert "14.1.1-1 -> 14.2.0-1" in out
+
+
+def test_run_outdated_reports_up_to_date_on_empty_output(monkeypatch, capsys):
+    # pacman -Qu / checkupdates exit non-zero with no stdout when nothing is outdated.
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", ""))
+
+    assert run_outdated(["pacman", "-Qu"], dry_run=False) == 0
+    assert capsys.readouterr().out.strip() == "Everything is up to date."
+
+
+def test_run_outdated_checkupdates_exit_two_is_up_to_date(monkeypatch, capsys):
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 2, "", ""))
+
+    assert run_outdated(["checkupdates"], dry_run=False) == 0
+    assert capsys.readouterr().out.strip() == "Everything is up to date."
+
+
+def test_run_outdated_checkupdates_error_is_surfaced(monkeypatch, capsys):
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "failed to retrieve packages\n"),
+    )
+
+    assert run_outdated(["checkupdates"], dry_run=False) == 1
+    captured = capsys.readouterr()
+    assert "Everything is up to date." not in captured.out
+    assert "could not check for outdated packages" in captured.err
+    assert "failed to retrieve packages" in captured.err
+
+
+def test_run_outdated_qu_error_with_stderr_is_surfaced(monkeypatch, capsys):
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "error: could not lock database\n"),
+    )
+
+    assert run_outdated(["pacman", "-Qu"], dry_run=False) == 1
+    captured = capsys.readouterr()
+    assert "Everything is up to date." not in captured.out
+    assert "could not check for outdated packages" in captured.err
+    assert "could not lock database" in captured.err
+
+
+def test_run_outdated_qu_unexpected_exit_code_is_surfaced(monkeypatch, capsys):
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 127, "", ""))
+
+    assert run_outdated(["pacman", "-Qu"], dry_run=False) == 127
+    assert "Everything is up to date." not in capsys.readouterr().out
+
+
+def test_run_outdated_dry_run_prints_command_without_executing(monkeypatch, capsys):
+    def fail(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    assert run_outdated(["pacman", "-Qu"], dry_run=True) == 0
+    assert capsys.readouterr().out.strip() == "backend command: pacman -Qu"
 
 
 def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
