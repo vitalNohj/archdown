@@ -74,7 +74,12 @@ Everything is up to date.
 ```
 
 - The nothing-outdated result is a normal, successful outcome. archdown should
-  not surface the backend's "no updates" exit-code quirk as a failure.
+  not surface the backend's "no updates" exit-code quirk as a failure. The
+  friendly line is printed and the command exits `0`.
+- "Nothing outdated" must be inferred only from a genuine no-updates signal: for
+  `checkupdates` that is exit code `2`; for a `-Qu` query that is empty output
+  with the backend's known no-updates exit and no error diagnostics. Any other
+  outcome is treated as a failure, not as up-to-date.
 
 ## Color behavior
 
@@ -91,6 +96,11 @@ Everything is up to date.
 - If the backend prints output that cannot be parsed into structured results,
   archdown should preserve access to that raw output rather than pretend the
   structured renderer succeeded or claim everything is up to date.
+- A genuine backend failure (database lock, network failure, `checkupdates`
+  temp-db copy failure, permission error, or any unexpected exit code) must be
+  reported honestly: print a clear message on stderr, preserve any backend
+  output, and exit with the backend's non-zero return code. Such a failure must
+  never be swallowed as "Everything is up to date."
 
 ## Future extension points
 

@@ -134,6 +134,48 @@ def test_run_outdated_reports_up_to_date_on_empty_output(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "Everything is up to date."
 
 
+def test_run_outdated_checkupdates_exit_two_is_up_to_date(monkeypatch, capsys):
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 2, "", ""))
+
+    assert run_outdated(["checkupdates"], dry_run=False) == 0
+    assert capsys.readouterr().out.strip() == "Everything is up to date."
+
+
+def test_run_outdated_checkupdates_error_is_surfaced(monkeypatch, capsys):
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "failed to retrieve packages\n"),
+    )
+
+    assert run_outdated(["checkupdates"], dry_run=False) == 1
+    captured = capsys.readouterr()
+    assert "Everything is up to date." not in captured.out
+    assert "could not check for outdated packages" in captured.err
+    assert "failed to retrieve packages" in captured.err
+
+
+def test_run_outdated_qu_error_with_stderr_is_surfaced(monkeypatch, capsys):
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "error: could not lock database\n"),
+    )
+
+    assert run_outdated(["pacman", "-Qu"], dry_run=False) == 1
+    captured = capsys.readouterr()
+    assert "Everything is up to date." not in captured.out
+    assert "could not check for outdated packages" in captured.err
+    assert "could not lock database" in captured.err
+
+
+def test_run_outdated_qu_unexpected_exit_code_is_surfaced(monkeypatch, capsys):
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 127, "", ""))
+
+    assert run_outdated(["pacman", "-Qu"], dry_run=False) == 127
+    assert "Everything is up to date." not in capsys.readouterr().out
+
+
 def test_run_outdated_dry_run_prints_command_without_executing(monkeypatch, capsys):
     def fail(*args, **kwargs):
         raise AssertionError("subprocess.run should not be called in dry-run")

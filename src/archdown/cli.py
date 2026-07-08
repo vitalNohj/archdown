@@ -172,6 +172,15 @@ def resolve_outdated_command(backend: Backend) -> list[str]:
     return list(backend.outdated)
 
 
+def _surface_outdated_failure(completed: subprocess.CompletedProcess[str]) -> int:
+    print("archdown: could not check for outdated packages", file=sys.stderr)
+    if completed.stdout.strip():
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    return completed.returncode
+
+
 def run_outdated(cmd: Sequence[str], *, dry_run: bool) -> int:
     pretty = " ".join(cmd)
     if dry_run:
@@ -180,21 +189,34 @@ def run_outdated(cmd: Sequence[str], *, dry_run: bool) -> int:
 
     completed = subprocess.run(list(cmd), capture_output=True, text=True)
     output = completed.stdout
+
+    if cmd[0] == "checkupdates":
+        # checkupdates exit codes: 0 => updates available, 2 => nothing to
+        # upgrade, anything else => a real failure.
+        if completed.returncode == 2:
+            print(render_outdated_packages([], color=None))
+            return 0
+        if completed.returncode != 0:
+            return _surface_outdated_failure(completed)
+        packages = parse_outdated_output(output)
+        if packages:
+            print(render_outdated_packages(packages, color=None))
+        elif output.strip():
+            print(output, end="")
+        else:
+            print(render_outdated_packages([], color=None))
+        return 0
+
     packages = parse_outdated_output(output)
     if packages:
         print(render_outdated_packages(packages, color=None))
         return 0
     if output.strip():
-        # Backend printed something we could not parse; show it instead of
-        # claiming everything is up to date.
-        print(output, end="")
-        if completed.stderr:
-            print(completed.stderr, end="", file=sys.stderr)
-        return completed.returncode
-    print(render_outdated_packages([], color=None))
-    if completed.stderr:
-        print(completed.stderr, end="", file=sys.stderr)
-    return 0
+        return _surface_outdated_failure(completed)
+    if completed.returncode in (0, 1) and not completed.stderr:
+        print(render_outdated_packages([], color=None))
+        return 0
+    return _surface_outdated_failure(completed)
 
 
 def run_info(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | None) -> int:
