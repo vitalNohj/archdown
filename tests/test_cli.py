@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_list, run_outdated, select_backend
+from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_list, run_outdated, select_backend
 
 
 def test_make_backend_yay_mapping():
@@ -16,6 +16,7 @@ def test_make_backend_yay_mapping():
     assert backend.upgrade == ["yay", "-Syu"]
     assert backend.info == ["yay", "-Si"]
     assert backend.outdated == ["yay", "-Qu"]
+    assert backend.orphans == ["yay", "-Qtdq"]
 
 
 def test_make_backend_pacman_mapping():
@@ -28,6 +29,7 @@ def test_make_backend_pacman_mapping():
     assert backend.upgrade == ["sudo", "pacman", "-Syu"]
     assert backend.info == ["pacman", "-Si"]
     assert backend.outdated == ["pacman", "-Qu"]
+    assert backend.orphans == ["pacman", "-Qtdq"]
 
 
 def test_select_backend_auto_prefers_paru(monkeypatch):
@@ -97,6 +99,9 @@ def test_parser_accepts_info_doctor_and_search_options():
     parsed = parser.parse_args(["outdated"])
     assert parsed.command == "outdated"
 
+    parsed = parser.parse_args(["cleanup"])
+    assert parsed.command == "cleanup"
+
 
 def test_outdated_subparser_rejects_flags_and_positionals():
     parser = build_parser()
@@ -104,6 +109,14 @@ def test_outdated_subparser_rejects_flags_and_positionals():
         parser.parse_args(["outdated", "ripgrep"])
     with pytest.raises(SystemExit):
         parser.parse_args(["outdated", "--raw"])
+
+
+def test_cleanup_subparser_rejects_flags_and_positionals():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["cleanup", "ripgrep"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["cleanup", "--raw"])
 
 
 def test_resolve_outdated_command_prefers_checkupdates_only_for_pacman(monkeypatch):
@@ -185,6 +198,88 @@ def test_run_outdated_dry_run_prints_command_without_executing(monkeypatch, caps
     assert capsys.readouterr().out.strip() == "backend command: pacman -Qu"
 
 
+def test_run_cleanup_lists_then_removes_and_updates_state(monkeypatch, tmp_path, capsys):
+    state_path = tmp_path / "archdown" / "managed-packages.json"
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"packages": ["orphanlib", "ripgrep"], "versions": {}}))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        if "-Qtdq" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "orphanlib\nleftover-dep\n", "")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_cleanup(["pacman", "-Qtdq"], ["sudo", "pacman", "-Rns"], dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "Orphaned packages to remove:" in out
+    assert "- orphanlib" in out
+    assert "- leftover-dep" in out
+    assert "backend command: sudo pacman -Rns orphanlib leftover-dep" in out
+    assert ["sudo", "pacman", "-Rns", "orphanlib", "leftover-dep"] in calls
+    # Removed orphans drop out of managed state; unrelated managed packages stay.
+    assert json.loads(state_path.read_text())["packages"] == ["ripgrep"]
+
+
+def test_run_cleanup_reports_nothing_when_no_orphans(monkeypatch, capsys):
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        # `pacman -Qtdq` exits non-zero with empty output when there are no orphans.
+        return subprocess.CompletedProcess(cmd, 1, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_cleanup(["pacman", "-Qtdq"], ["sudo", "pacman", "-Rns"], dry_run=False) == 0
+    assert capsys.readouterr().out.strip() == "Nothing to clean up."
+    assert calls == [["pacman", "-Qtdq"]]
+
+
+def test_run_cleanup_dry_run_shows_orphans_without_removing(monkeypatch, tmp_path, capsys):
+    state_path = tmp_path / "archdown" / "managed-packages.json"
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"packages": ["orphanlib"], "versions": {}}))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        if "-Qtdq" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "orphanlib\n", "")
+        raise AssertionError("cleanup must not remove packages in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_cleanup(["pacman", "-Qtdq"], ["sudo", "pacman", "-Rns"], dry_run=True) == 0
+    out = capsys.readouterr().out
+    assert "- orphanlib" in out
+    assert "backend command: sudo pacman -Rns orphanlib" in out
+    # Only the read-only query runs; no removal and managed state is untouched.
+    assert calls == [["pacman", "-Qtdq"]]
+    assert json.loads(state_path.read_text())["packages"] == ["orphanlib"]
+
+
+def test_run_cleanup_surfaces_query_failure(monkeypatch, capsys):
+    def fake_run(cmd, *args, **kwargs):
+        if "-Qtdq" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "error: could not lock database\n")
+        raise AssertionError("cleanup must not remove packages after a query failure")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_cleanup(["pacman", "-Qtdq"], ["sudo", "pacman", "-Rns"], dry_run=False) == 1
+    captured = capsys.readouterr()
+    assert "Nothing to clean up." not in captured.out
+    assert "could not check for orphaned packages" in captured.err
+    assert "could not lock database" in captured.err
+
+
 def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"yay", "pacman"} else None)
     backend = make_backend("yay")
@@ -195,6 +290,7 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- yay: found" in out
     assert "- pacman: found" in out
     assert "- info: yay -Si <pkg>" in out
+    assert "- cleanup: yay -Qtdq | yay -Rns -" in out
 
 
 def test_run_list_tracks_managed_version_changes_and_leaves_raw_mode_unchanged(monkeypatch, tmp_path, capsys):

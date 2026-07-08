@@ -24,6 +24,7 @@ class Backend:
     upgrade: list[str]
     info: list[str]
     outdated: list[str]
+    orphans: list[str]
 
 
 def make_backend(name: str) -> Backend:
@@ -38,6 +39,7 @@ def make_backend(name: str) -> Backend:
             ["paru", "-Syu"],
             ["paru", "-Si"],
             ["paru", "-Qu"],
+            ["paru", "-Qtdq"],
         )
     if name == "yay":
         return Backend(
@@ -50,6 +52,7 @@ def make_backend(name: str) -> Backend:
             ["yay", "-Syu"],
             ["yay", "-Si"],
             ["yay", "-Qu"],
+            ["yay", "-Qtdq"],
         )
     if name == "pacman":
         return Backend(
@@ -62,6 +65,7 @@ def make_backend(name: str) -> Backend:
             ["sudo", "pacman", "-Syu"],
             ["pacman", "-Si"],
             ["pacman", "-Qu"],
+            ["pacman", "-Qtdq"],
         )
     raise AssertionError(f"Unknown backend: {name}")
 
@@ -264,6 +268,27 @@ def run_adopt(cmd: Sequence[str], *, packages: Sequence[str], from_current: bool
     return 0
 
 
+def run_cleanup(query_cmd: Sequence[str], uninstall_cmd: Sequence[str], *, dry_run: bool) -> int:
+    # The orphan query (`-Qtdq`) is read-only, so it runs even under --dry-run to
+    # show the user exactly what would be removed.
+    completed = subprocess.run(list(query_cmd), capture_output=True, text=True)
+    orphans = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+    if not orphans:
+        if completed.stderr.strip():
+            print("archdown: could not check for orphaned packages", file=sys.stderr)
+            print(completed.stderr, end="", file=sys.stderr)
+            return completed.returncode or 1
+        # `-Qtdq` exits non-zero with empty output when there is nothing to clean.
+        print("Nothing to clean up.")
+        return 0
+
+    print("Orphaned packages to remove:")
+    for name in orphans:
+        print(f"- {name}")
+    return run_uninstall([*uninstall_cmd, *orphans], orphans, dry_run)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="archdown",
@@ -302,6 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     adopt.add_argument("--dry-run", action="store_true", help="Preview what would be adopted without writing state")
 
     sub.add_parser("outdated", help="List packages with an available upgrade (read-only; does not sync or upgrade)")
+    sub.add_parser("cleanup", help="Remove orphaned dependency packages nothing needs anymore")
     sub.add_parser("refresh", help="Refresh package databases only")
     sub.add_parser("upgrade", help="Upgrade the full system")
     sub.add_parser("update", help="Alias for upgrade; safer than Homebrew-style split semantics on Arch")
@@ -330,6 +356,7 @@ def print_doctor(backend: Backend) -> None:
     print(f"- info: {' '.join(backend.info)} <pkg>")
     print(f"- list: {' '.join(backend.list_installed)}")
     print(f"- outdated: {' '.join(resolve_outdated_command(backend))}")
+    print(f"- cleanup: {' '.join(backend.orphans)} | {' '.join(backend.uninstall)} -")
     print(f"- refresh: {' '.join(backend.refresh)}")
     print(f"- upgrade/update: {' '.join(backend.upgrade)}")
 
@@ -359,6 +386,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.command == "outdated":
         return run_outdated(resolve_outdated_command(backend), dry_run=args.dry_run)
+    if args.command == "cleanup":
+        return run_cleanup(backend.orphans, backend.uninstall, dry_run=args.dry_run)
     if args.command == "refresh":
         print("warning: refresh only syncs databases. On Arch, full upgrades are usually safer.", file=sys.stderr)
         return run(backend.refresh, args.dry_run)
