@@ -45,6 +45,7 @@ Implemented now:
 - uninstall
 - search
 - info
+- which (read-only lookup of which package owns a command or file)
 - doctor
 - list with structured Libraries / Applications / User installed sections
 - adopt existing packages into archdown's managed package state
@@ -65,7 +66,7 @@ Specs
 
 - Specs live under `openspec/`.
 - archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
-- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, and `openspec/specs/cleanup-command.md`.
+- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, `openspec/specs/cleanup-command.md`, and `openspec/specs/which-command.md`.
 
 Install locally for development
 
@@ -81,6 +82,7 @@ Try commands safely
 archdown --dry-run install ripgrep
 archdown --dry-run search browser
 archdown --dry-run info ripgrep
+archdown which rg
 archdown doctor
 archdown outdated
 archdown --dry-run cleanup

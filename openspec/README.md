@@ -16,6 +16,7 @@ This directory holds behavior specs for archdown.
 - `specs/list-command.md` - structured list behavior, managed package version tracking, and recently-updated tags.
 - `specs/outdated-command.md` - read-only structured listing of packages with an available upgrade.
 - `specs/cleanup-command.md` - remove orphaned dependency packages nothing needs anymore.
+- `specs/which-command.md` - read-only lookup of which package owns a command or file.
 
 ## Workflow
 
