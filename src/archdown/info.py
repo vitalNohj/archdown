@@ -20,6 +20,11 @@ class PackageInfo:
     description: str = ""
     fields: dict[str, str] = field(default_factory=dict)
 
+    @property
+    def is_empty(self) -> bool:
+        """True when parsing produced no fields, i.e. the package was not found."""
+        return not self.fields
+
 
 def parse_info_output(output: str) -> PackageInfo:
     fields: dict[str, str] = {}

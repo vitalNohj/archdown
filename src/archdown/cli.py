@@ -117,8 +117,16 @@ def run_search(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | No
     results = parse_search_output(output)
     if results:
         print(render_search_results(results, color=color))
-    else:
+    elif output.strip():
+        # Backend produced output we could not parse: fall back to raw rather
+        # than claim the structured renderer found nothing.
         print(output, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+    else:
+        # No matches: route the empty result through the renderer so the user
+        # gets a clear "No packages found." line instead of blank output.
+        print(render_search_results(results, color=color))
         if completed.stderr:
             print(completed.stderr, end="", file=sys.stderr)
     return completed.returncode
@@ -238,7 +246,12 @@ def run_info(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | None
         return completed.returncode
 
     info = parse_info_output(output)
-    print(render_package_info(info, color=color))
+    if info.is_empty:
+        # A missing package yields empty backend output, which parses to an empty
+        # PackageInfo; show a clear line instead of an empty "Package information" block.
+        print("No package found.")
+    else:
+        print(render_package_info(info, color=color))
     if completed.stderr:
         print(completed.stderr, end="", file=sys.stderr)
     return completed.returncode

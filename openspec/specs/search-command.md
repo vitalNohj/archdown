@@ -94,6 +94,13 @@ Suggested color direction:
 - A future `--raw` mode should expose backend output directly.
 - A fallback path must never pretend the structured renderer succeeded when it did not.
 
+## Empty results behavior
+
+- When a search matches nothing (empty backend output), the default view must print a clear "No packages found." line rather than blank output.
+- The empty result should be routed through the normal search renderer so the friendly message stays consistent with the structured view.
+- Non-empty output that fails to parse still falls back to raw passthrough; only genuinely empty results show the "No packages found." message.
+- The backend exit code is preserved; the friendly message is a display concern, not a change in success semantics.
+
 ## Future extension points
 
 - compact and richer human views

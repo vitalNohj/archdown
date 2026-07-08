@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_list, run_outdated, select_backend
+from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_info, run_list, run_outdated, run_search, select_backend
 
 
 def test_make_backend_yay_mapping():
@@ -291,6 +291,44 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- pacman: found" in out
     assert "- info: yay -Si <pkg>" in out
     assert "- cleanup: yay -Qtdq | yay -Rns -" in out
+
+
+def test_run_search_reports_no_matches_on_empty_output(monkeypatch, capsys):
+    # pacman/yay/paru exit non-zero with empty stdout when a query matches nothing.
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", ""))
+
+    assert run_search(["pacman", "-Ss", "nope"], dry_run=False, raw=False, color=False) == 1
+    assert capsys.readouterr().out.strip() == "No packages found."
+
+
+def test_run_search_falls_back_to_raw_when_output_unparseable(monkeypatch, capsys):
+    # Non-empty output that yields no structured results must not be swallowed.
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "something weird\n", ""),
+    )
+
+    assert run_search(["pacman", "-Ss", "weird"], dry_run=False, raw=False, color=False) == 0
+    out = capsys.readouterr().out
+    assert "something weird" in out
+    assert "No packages found." not in out
+
+
+def test_run_info_reports_missing_package_without_empty_block(monkeypatch, capsys):
+    # A missing package: backend prints the error to stderr, empty stdout, non-zero exit.
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "error: package 'nope' was not found\n"),
+    )
+
+    assert run_info(["pacman", "-Si", "nope"], dry_run=False, raw=False, color=False) == 1
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "No package found."
+    assert "Package information" not in captured.out
+    # The backend's own error is still surfaced on stderr.
+    assert "was not found" in captured.err
 
 
 def test_run_list_tracks_managed_version_changes_and_leaves_raw_mode_unchanged(monkeypatch, tmp_path, capsys):
