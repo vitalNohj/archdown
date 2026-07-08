@@ -66,7 +66,8 @@ def _parse_result_header(line: str) -> PackageSearchResult | None:
     source, name = first.split("/", 1)
     rest = line[len(first):].strip()
     version = rest.split(maxsplit=1)[0] if rest else ""
-    installed = "[installed" in line.lower()
+    lowered = line.lower()
+    installed = "[installed" in lowered or "(installed" in lowered
     return PackageSearchResult(source, name, version, installed)
 
 
