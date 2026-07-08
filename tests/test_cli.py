@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_info, run_list, run_outdated, run_search, run_which, select_backend
+from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, resolve_uses_command, run_cleanup, run_info, run_list, run_outdated, run_search, run_uses, run_which, select_backend
 
 
 def test_make_backend_yay_mapping():
@@ -18,6 +18,7 @@ def test_make_backend_yay_mapping():
     assert backend.outdated == ["yay", "-Qu"]
     assert backend.orphans == ["yay", "-Qtdq"]
     assert backend.owns == ["yay", "-Qo"]
+    assert backend.local_info == ["yay", "-Qi"]
 
 
 def test_make_backend_pacman_mapping():
@@ -32,6 +33,7 @@ def test_make_backend_pacman_mapping():
     assert backend.outdated == ["pacman", "-Qu"]
     assert backend.orphans == ["pacman", "-Qtdq"]
     assert backend.owns == ["pacman", "-Qo"]
+    assert backend.local_info == ["pacman", "-Qi"]
 
 
 def test_select_backend_auto_prefers_paru(monkeypatch):
@@ -104,6 +106,10 @@ def test_parser_accepts_info_doctor_and_search_options():
     assert parsed.raw is True
     assert parsed.no_color is True
 
+    parsed = parser.parse_args(["uses", "openssl"])
+    assert parsed.command == "uses"
+    assert parsed.package == "openssl"
+
     parsed = parser.parse_args(["outdated"])
     assert parsed.command == "outdated"
 
@@ -133,6 +139,81 @@ def test_which_subparser_requires_exactly_one_positional():
         parser.parse_args(["which"])
     with pytest.raises(SystemExit):
         parser.parse_args(["which", "rg", "fd"])
+
+
+def test_uses_subparser_requires_exactly_one_positional_and_no_flags():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["uses"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["uses", "openssl", "curl"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["uses", "openssl", "--raw"])
+
+
+def test_resolve_uses_command_prefers_pactree(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name == "pactree" else None)
+    assert resolve_uses_command(make_backend("pacman")) == (["pactree", "-r", "-l"], "pactree")
+
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    assert resolve_uses_command(make_backend("yay")) == (["yay", "-Qi"], "qi")
+
+
+def test_run_uses_renders_pactree_dependents(monkeypatch, capsys):
+    output = "openssl\ncurl\ngit\nwget\n"
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, output, "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_uses(["pactree", "-r", "-l"], "openssl", "pactree", dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "Packages that depend on openssl" in out
+    assert "curl" in out and "git" in out and "wget" in out
+    assert calls == [["pactree", "-r", "-l", "openssl"]]
+
+
+def test_run_uses_renders_required_by_from_qi(monkeypatch, capsys):
+    output = "Name            : openssl\nRequired By     : curl  git\n"
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, output, ""))
+
+    assert run_uses(["pacman", "-Qi"], "openssl", "qi", dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "Packages that depend on openssl" in out
+    assert "curl" in out and "git" in out
+
+
+def test_run_uses_reports_nothing_depends_on_empty_result(monkeypatch, capsys):
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "leaf-pkg\n", ""))
+
+    assert run_uses(["pactree", "-r", "-l"], "leaf-pkg", "pactree", dry_run=False) == 0
+    assert capsys.readouterr().out.strip() == "Nothing depends on leaf-pkg."
+
+
+def test_run_uses_surfaces_backend_failure(monkeypatch, capsys):
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "error: package 'nope' not found\n"),
+    )
+
+    assert run_uses(["pactree", "-r", "-l"], "nope", "pactree", dry_run=False) == 1
+    captured = capsys.readouterr()
+    assert "Nothing depends on" not in captured.out
+    assert "could not determine what depends on nope" in captured.err
+    assert "not found" in captured.err
+
+
+def test_run_uses_dry_run_prints_command_without_executing(monkeypatch, capsys):
+    def fail(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    assert run_uses(["pactree", "-r", "-l"], "openssl", "pactree", dry_run=True) == 0
+    assert capsys.readouterr().out.strip() == "backend command: pactree -r -l openssl"
 
 
 def test_run_which_resolves_command_and_renders_owner(monkeypatch, capsys):
@@ -397,6 +478,7 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- pacman: found" in out
     assert "- info: yay -Si <pkg>" in out
     assert "- which: yay -Qo <path>" in out
+    assert "- uses: yay -Qi <pkg>" in out
     assert "- cleanup: yay -Qtdq | yay -Rns -" in out
 
 
