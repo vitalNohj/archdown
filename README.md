@@ -17,6 +17,7 @@ archdown install neovim
 archdown uninstall neovim
 archdown search terminal emulator
 archdown info neovim
+archdown which rg
 archdown doctor
 archdown list
 archdown list --group managed
