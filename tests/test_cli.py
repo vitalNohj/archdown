@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_info, run_list, run_outdated, run_search, select_backend
+from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_info, run_list, run_outdated, run_search, run_which, select_backend
 
 
 def test_make_backend_yay_mapping():
@@ -17,6 +17,7 @@ def test_make_backend_yay_mapping():
     assert backend.info == ["yay", "-Si"]
     assert backend.outdated == ["yay", "-Qu"]
     assert backend.orphans == ["yay", "-Qtdq"]
+    assert backend.owns == ["yay", "-Qo"]
 
 
 def test_make_backend_pacman_mapping():
@@ -30,6 +31,7 @@ def test_make_backend_pacman_mapping():
     assert backend.info == ["pacman", "-Si"]
     assert backend.outdated == ["pacman", "-Qu"]
     assert backend.orphans == ["pacman", "-Qtdq"]
+    assert backend.owns == ["pacman", "-Qo"]
 
 
 def test_select_backend_auto_prefers_paru(monkeypatch):
@@ -96,6 +98,12 @@ def test_parser_accepts_info_doctor_and_search_options():
     assert parsed.command == "adopt"
     assert parsed.from_current is True
 
+    parsed = parser.parse_args(["which", "rg", "--raw", "--no-color"])
+    assert parsed.command == "which"
+    assert parsed.target == "rg"
+    assert parsed.raw is True
+    assert parsed.no_color is True
+
     parsed = parser.parse_args(["outdated"])
     assert parsed.command == "outdated"
 
@@ -117,6 +125,104 @@ def test_cleanup_subparser_rejects_flags_and_positionals():
         parser.parse_args(["cleanup", "ripgrep"])
     with pytest.raises(SystemExit):
         parser.parse_args(["cleanup", "--raw"])
+
+
+def test_which_subparser_requires_exactly_one_positional():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["which"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["which", "rg", "fd"])
+
+
+def test_run_which_resolves_command_and_renders_owner(monkeypatch, capsys):
+    monkeypatch.setattr("os.path.exists", lambda path: False)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/rg" if name == "rg" else None)
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "/usr/bin/rg is owned by ripgrep 15.1.0-4\n", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_which(["pacman", "-Qo"], "rg", dry_run=False, raw=False, color=False) == 0
+    out = capsys.readouterr().out
+    assert "ripgrep  15.1.0-4" in out
+    assert "path: /usr/bin/rg" in out
+    assert calls == [["pacman", "-Qo", "/usr/bin/rg"]]
+
+
+def test_run_which_uses_existing_path_without_resolving(monkeypatch, capsys):
+    monkeypatch.setattr("os.path.exists", lambda path: True)
+
+    def fail_which(name):
+        raise AssertionError("existing paths must not be resolved on PATH")
+
+    monkeypatch.setattr("shutil.which", fail_which)
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "/usr/bin/rg is owned by ripgrep 15.1.0-4\n", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_which(["pacman", "-Qo"], "/usr/bin/rg", dry_run=False, raw=False, color=False) == 0
+    assert calls == [["pacman", "-Qo", "/usr/bin/rg"]]
+
+
+def test_run_which_reports_not_on_path(monkeypatch, capsys):
+    monkeypatch.setattr("os.path.exists", lambda path: False)
+    monkeypatch.setattr("shutil.which", lambda name: None)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("must not query the backend when the command is not on PATH")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+
+    assert run_which(["pacman", "-Qo"], "rg", dry_run=False, raw=False, color=False) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.strip() == "'rg' not found on PATH."
+
+
+def test_run_which_reports_no_owner(monkeypatch, capsys):
+    monkeypatch.setattr("os.path.exists", lambda path: True)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "error: No package owns /tmp/loose-file\n"),
+    )
+
+    assert run_which(["pacman", "-Qo"], "/tmp/loose-file", dry_run=False, raw=False, color=False) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.strip() == "No package owns '/tmp/loose-file'."
+
+
+def test_run_which_raw_passes_through_backend_output(monkeypatch, capsys):
+    monkeypatch.setattr("os.path.exists", lambda path: True)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "/usr/bin/rg is owned by ripgrep 15.1.0-4\n", ""),
+    )
+
+    assert run_which(["pacman", "-Qo"], "/usr/bin/rg", dry_run=False, raw=True, color=False) == 0
+    assert capsys.readouterr().out == "/usr/bin/rg is owned by ripgrep 15.1.0-4\n"
+
+
+def test_run_which_dry_run_prints_command_without_executing(monkeypatch, capsys):
+    monkeypatch.setattr("os.path.exists", lambda path: False)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/rg" if name == "rg" else None)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    assert run_which(["pacman", "-Qo"], "rg", dry_run=True, raw=False, color=False) == 0
+    assert capsys.readouterr().out.strip() == "backend command: pacman -Qo /usr/bin/rg"
 
 
 def test_resolve_outdated_command_prefers_checkupdates_only_for_pacman(monkeypatch):
@@ -290,6 +396,7 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- yay: found" in out
     assert "- pacman: found" in out
     assert "- info: yay -Si <pkg>" in out
+    assert "- which: yay -Qo <path>" in out
     assert "- cleanup: yay -Qtdq | yay -Rns -" in out
 
 

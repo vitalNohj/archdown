@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from archdown.info import parse_info_output, render_package_info
 from archdown.listing import parse_list_output, parse_outdated_output, render_installed_packages, render_outdated_packages
 from archdown.search import parse_search_output, render_search_results
 from archdown.state import add_managed_packages, load_managed_packages, remove_managed_packages, update_managed_package_versions
+from archdown.which import parse_owner_output, render_owner
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class Backend:
     info: list[str]
     outdated: list[str]
     orphans: list[str]
+    owns: list[str]
 
 
 def make_backend(name: str) -> Backend:
@@ -40,6 +43,7 @@ def make_backend(name: str) -> Backend:
             ["paru", "-Si"],
             ["paru", "-Qu"],
             ["paru", "-Qtdq"],
+            ["paru", "-Qo"],
         )
     if name == "yay":
         return Backend(
@@ -53,6 +57,7 @@ def make_backend(name: str) -> Backend:
             ["yay", "-Si"],
             ["yay", "-Qu"],
             ["yay", "-Qtdq"],
+            ["yay", "-Qo"],
         )
     if name == "pacman":
         return Backend(
@@ -66,6 +71,7 @@ def make_backend(name: str) -> Backend:
             ["pacman", "-Si"],
             ["pacman", "-Qu"],
             ["pacman", "-Qtdq"],
+            ["pacman", "-Qo"],
         )
     raise AssertionError(f"Unknown backend: {name}")
 
@@ -257,6 +263,52 @@ def run_info(cmd: Sequence[str], *, dry_run: bool, raw: bool, color: bool | None
     return completed.returncode
 
 
+def run_which(cmd: Sequence[str], arg: str, *, dry_run: bool, raw: bool, color: bool | None) -> int:
+    # Resolve the argument to a path first: an existing path is used as-is,
+    # otherwise treat it as a command name and look it up on PATH like a shell
+    # would. This is what lets a user type the short name they actually invoke.
+    if os.path.exists(arg):
+        target = arg
+    else:
+        resolved = shutil.which(arg)
+        if resolved is None:
+            print(f"'{arg}' not found on PATH.", file=sys.stderr)
+            return 1
+        target = resolved
+
+    full = [*cmd, target]
+    pretty = " ".join(full)
+    if dry_run:
+        print(f"backend command: {pretty}")
+        return 0
+
+    completed = subprocess.run(full, capture_output=True, text=True)
+    output = completed.stdout
+    if raw:
+        print(output, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+        return completed.returncode
+
+    # `pacman -Qo` exits non-zero with an "error: No package owns ..." diagnostic
+    # when nothing owns the path. Surface that as one friendly line, never a blank
+    # line or a raw traceback.
+    if completed.returncode != 0 or not output.strip():
+        print(f"No package owns '{arg}'.", file=sys.stderr)
+        return completed.returncode or 1
+
+    owner = parse_owner_output(output)
+    if owner is None:
+        # Owner reported but unparseable: preserve the raw backend output rather
+        # than pretend the structured render succeeded.
+        print(output, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+        return completed.returncode
+    print(render_owner(owner, color=color))
+    return 0
+
+
 def run_adopt(cmd: Sequence[str], *, packages: Sequence[str], from_current: bool, dry_run: bool) -> int:
     if not packages and not from_current:
         raise SystemExit("adopt requires package names or --from-current")
@@ -328,6 +380,11 @@ def build_parser() -> argparse.ArgumentParser:
     info.add_argument("--raw", action="store_true", help="Show raw backend output")
     info.add_argument("--no-color", action="store_true", help="Disable colored output")
 
+    which = sub.add_parser("which", help="Show which package owns a command or file (read-only)")
+    which.add_argument("target", help="Command name or path")
+    which.add_argument("--raw", action="store_true", help="Show raw backend output")
+    which.add_argument("--no-color", action="store_true", help="Disable colored output")
+
     listing = sub.add_parser("list", help="List explicitly installed packages")
     listing.add_argument("--raw", action="store_true", help="Show raw backend output")
     listing.add_argument("--no-color", action="store_true", help="Disable colored output")
@@ -367,6 +424,7 @@ def print_doctor(backend: Backend) -> None:
     print(f"- uninstall: {' '.join(backend.uninstall)} <pkg...>")
     print(f"- search: {' '.join(backend.search)} <query...>")
     print(f"- info: {' '.join(backend.info)} <pkg>")
+    print(f"- which: {' '.join(backend.owns)} <path>")
     print(f"- list: {' '.join(backend.list_installed)}")
     print(f"- outdated: {' '.join(resolve_outdated_command(backend))}")
     print(f"- cleanup: {' '.join(backend.orphans)} | {' '.join(backend.uninstall)} -")
@@ -387,6 +445,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_search([*backend.search, *args.query], dry_run=args.dry_run, raw=args.raw, color=False if args.no_color else None)
     if args.command == "info":
         return run_info([*backend.info, args.package], dry_run=args.dry_run, raw=args.raw, color=False if args.no_color else None)
+    if args.command == "which":
+        return run_which(backend.owns, args.target, dry_run=args.dry_run, raw=args.raw, color=False if args.no_color else None)
     if args.command == "list":
         return run_list(
             backend.list_installed,

@@ -21,6 +21,7 @@ Current commands:
 - uninstall
 - search
 - info
+- which
 - list
 - outdated
 - cleanup
