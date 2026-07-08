@@ -13,6 +13,14 @@ extra/claude-tools 2.0.0-1
     Helper tools for Claude
 """
 
+# yay/paru annotate installed packages as "(Installed)" with size info,
+# unlike pacman's "[installed]".
+PARU_SEARCH = """extra/ripgrep 15.1.0-4 (1.4 MiB 4.3 MiB) (Installed)
+    A search tool
+extra/claude-tools 2.0.0-1 (0.5 MiB 1.2 MiB)
+    Helper tools for Claude
+"""
+
 
 def test_parse_search_output_extracts_package_fields():
     results = parse_search_output(YAY_SEARCH)
@@ -39,6 +47,13 @@ def test_parse_search_output_handles_pacman_shape():
     assert results[0].name == "claude-desktop"
     assert results[0].installed is True
     assert results[1].description == "Helper tools for Claude"
+
+
+def test_parse_search_output_handles_paru_installed_shape():
+    results = parse_search_output(PARU_SEARCH)
+    assert results[0].name == "ripgrep"
+    assert results[0].installed is True
+    assert results[1].installed is False
 
 
 def test_render_search_results_empty_message():
