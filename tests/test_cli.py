@@ -3,7 +3,23 @@ import subprocess
 
 import pytest
 
-from archdown.cli import build_parser, make_backend, print_doctor, resolve_outdated_command, run_cleanup, run_info, run_list, run_outdated, run_search, run_which, select_backend
+from archdown.cli import (
+    build_parser,
+    main,
+    make_backend,
+    print_doctor,
+    resolve_outdated_command,
+    run_cleanup,
+    run_confirmed,
+    run_info,
+    run_install,
+    run_list,
+    run_outdated,
+    run_search,
+    run_uninstall,
+    run_which,
+    select_backend,
+)
 
 
 def test_make_backend_yay_mapping():
@@ -232,6 +248,85 @@ def test_resolve_outdated_command_prefers_checkupdates_only_for_pacman(monkeypat
 
     monkeypatch.setattr("shutil.which", lambda name: None)
     assert resolve_outdated_command(make_backend("pacman")) == ["pacman", "-Qu"]
+
+
+def test_run_confirmed_prints_success_only_after_success(monkeypatch, capsys):
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_confirmed(["sudo", "pacman", "-Syu"], dry_run=False, success_message="System update completed.") == 0
+    out = capsys.readouterr().out
+    assert "backend command: sudo pacman -Syu" in out
+    assert "System update completed." in out
+    assert calls == [["sudo", "pacman", "-Syu"]]
+
+
+def test_run_confirmed_does_not_confirm_dry_run_or_failure(monkeypatch, capsys):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fail_if_called)
+    assert run_confirmed(["sudo", "pacman", "-Syu"], dry_run=True, success_message="System update completed.") == 0
+    assert "System update completed." not in capsys.readouterr().out
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1))
+    assert run_confirmed(["sudo", "pacman", "-Syu"], dry_run=False, success_message="System update completed.") == 1
+    assert "System update completed." not in capsys.readouterr().out
+
+
+def test_run_install_confirms_packages_after_success(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0))
+
+    assert run_install(["sudo", "pacman", "-S", "ripgrep", "fd"], ["ripgrep", "fd"], dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "backend command: sudo pacman -S ripgrep fd" in out
+    assert "Installed 2 packages: ripgrep, fd." in out
+
+
+def test_run_install_does_not_confirm_dry_run_or_failure(monkeypatch, capsys):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fail_if_called)
+    assert run_install(["sudo", "pacman", "-S", "ripgrep"], ["ripgrep"], dry_run=True) == 0
+    assert "Installed ripgrep." not in capsys.readouterr().out
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1))
+    assert run_install(["sudo", "pacman", "-S", "ripgrep"], ["ripgrep"], dry_run=False) == 1
+    assert "Installed ripgrep." not in capsys.readouterr().out
+
+
+def test_run_uninstall_confirms_removed_package_after_success(monkeypatch, tmp_path, capsys):
+    state_path = tmp_path / "archdown" / "managed-packages.json"
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"packages": ["ripgrep"], "versions": {}}))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0))
+
+    assert run_uninstall(["sudo", "pacman", "-Rns", "ripgrep"], ["ripgrep"], dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "backend command: sudo pacman -Rns ripgrep" in out
+    assert "Removed ripgrep." in out
+    assert json.loads(state_path.read_text())["packages"] == []
+
+
+def test_main_refresh_and_update_confirm_after_success(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name == "pacman" else None)
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0))
+
+    assert main(["--backend", "pacman", "refresh"]) == 0
+    captured = capsys.readouterr()
+    assert "Package databases refreshed." in captured.out
+    assert "warning: refresh only syncs databases" in captured.err
+
+    assert main(["--backend", "pacman", "update"]) == 0
+    assert "System update completed." in capsys.readouterr().out
 
 
 def test_run_outdated_renders_transitions(monkeypatch, capsys):

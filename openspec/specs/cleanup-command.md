@@ -38,6 +38,9 @@ archdown itself, not to this command.
   package is actually removed.
 - Packages removed this way are dropped from archdown's managed-package state,
   the same as an ordinary `uninstall`.
+- After a successful removal, `cleanup` prints the same friendly confirmation an
+  ordinary `uninstall` does (for example "Removed ripgrep."), so the user knows
+  the orphans were actually cleaned up.
 
 ## Dry-run behavior
 
