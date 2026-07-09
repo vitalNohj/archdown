@@ -43,7 +43,7 @@ archdown is a user-friendly CLI wrapper for Arch package workflows. It is not a 
 - A confirmation is printed only after the backend exits successfully (exit code `0`) and only for a real run. archdown must never claim success on a non-zero backend exit, and must preserve the backend's own output and stderr on failure.
 - `--dry-run` stays a preview: it prints the backend command it would run but must not print a completion confirmation, since nothing was executed.
 - Package confirmations name what changed, e.g. "Installed ripgrep." for one package or "Installed 2 packages: ripgrep, fd." for several; `refresh` and `update`/`upgrade` confirm the overall operation ("Package databases refreshed.", "System update completed.").
-- Read-only structured commands (`search`, `info`, `which`, `list`, `outdated`) do not add completion confirmations, and `doctor` stays an explicit diagnostic explainer.
+- Read-only structured commands (`search`, `info`, `which`, `uses`, `list`, `outdated`) do not add completion confirmations, and `doctor` stays an explicit diagnostic explainer.
 
 ## Fallback behavior
 

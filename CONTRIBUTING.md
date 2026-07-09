@@ -22,6 +22,7 @@ Current commands:
 - search
 - info
 - which
+- uses
 - list
 - outdated
 - cleanup
