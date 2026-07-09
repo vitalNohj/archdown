@@ -97,10 +97,28 @@ def run(cmd: Sequence[str], dry_run: bool) -> int:
     return completed.returncode
 
 
+def print_success(message: str, *, dry_run: bool, code: int) -> None:
+    if code == 0 and not dry_run:
+        print(message)
+
+
+def format_package_confirmation(verb: str, packages: Sequence[str]) -> str:
+    if len(packages) == 1:
+        return f"{verb} {packages[0]}."
+    return f"{verb} {len(packages)} packages: {', '.join(packages)}."
+
+
+def run_confirmed(cmd: Sequence[str], dry_run: bool, success_message: str) -> int:
+    code = run(cmd, dry_run)
+    print_success(success_message, dry_run=dry_run, code=code)
+    return code
+
+
 def run_install(cmd: Sequence[str], packages: Sequence[str], dry_run: bool) -> int:
     code = run(cmd, dry_run)
     if code == 0 and not dry_run:
         add_managed_packages(packages)
+        print(format_package_confirmation("Installed", packages))
     return code
 
 
@@ -108,6 +126,7 @@ def run_uninstall(cmd: Sequence[str], packages: Sequence[str], dry_run: bool) ->
     code = run(cmd, dry_run)
     if code == 0 and not dry_run:
         remove_managed_packages(packages)
+        print(format_package_confirmation("Removed", packages))
     return code
 
 
@@ -520,9 +539,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_cleanup(backend.orphans, backend.uninstall, dry_run=args.dry_run)
     if args.command == "refresh":
         print("warning: refresh only syncs databases. On Arch, full upgrades are usually safer.", file=sys.stderr)
-        return run(backend.refresh, args.dry_run)
+        return run_confirmed(backend.refresh, args.dry_run, "Package databases refreshed.")
     if args.command in {"upgrade", "update"}:
-        return run(backend.upgrade, args.dry_run)
+        return run_confirmed(backend.upgrade, args.dry_run, "System update completed.")
     if args.command == "doctor":
         print_doctor(backend)
         return 0

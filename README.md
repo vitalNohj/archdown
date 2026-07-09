@@ -116,6 +116,7 @@ Design notes
 
 - `update` and `upgrade` intentionally do the same thing.
 - `refresh` exists for people who explicitly want metadata sync only.
+- mutating commands (`install`, `uninstall`, `refresh`, `update`/`upgrade`, and `cleanup`) print a friendly completion line only after the backend exits successfully; failures and `--dry-run` previews never claim success.
 - uninstall currently maps to `-Rns`, which is opinionated and may become configurable.
 - `doctor` is a human-readable backend explainer, not a machine interface.
 - default UX should move toward structured parsing and rendering over backend output.
