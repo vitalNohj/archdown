@@ -35,6 +35,20 @@ def test_render_outdated_packages_shows_aligned_transitions():
     assert "fd       10.2.0-1 -> 10.3.0-1" in output
 
 
+def test_render_outdated_packages_supports_color():
+    output = render_outdated_packages(parse_outdated_output(OUTDATED_OUTPUT), color=True)
+    assert "\033[38;5;111mOutdated packages\033[0m" in output
+    assert "\033[1mripgrep\033[0m" in output
+    assert "\033[38;5;83m14.2.0-1\033[0m" in output
+    # The transition stays readable without relying on color alone.
+    assert " -> " in output
+
+
+def test_render_outdated_packages_without_color_has_no_ansi():
+    output = render_outdated_packages(parse_outdated_output(OUTDATED_OUTPUT), color=False)
+    assert "\033[" not in output
+
+
 def test_render_outdated_packages_empty_message():
     assert render_outdated_packages([], color=False) == "Everything is up to date."
 

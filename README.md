@@ -35,7 +35,8 @@ How it works
 - falls back to `yay`
 - falls back to `pacman`
 - uses AUR-capable backends when available
-- keeps `update` as an alias of full-system `upgrade` because Arch partial-upgrade semantics are risky
+- `update` is a safe, read-only Homebrew-style check: it refreshes update knowledge via `checkupdates`' temporary database copy (or the AUR helper's query mode) and reports what could be upgraded, without touching the live sync databases
+- `upgrade` is the only verb that actually installs upgrades, and it always does a full `-Syu`, because partial upgrades are risky on Arch
 
 Status
 
@@ -55,8 +56,8 @@ Implemented now:
 - outdated (read-only structured list of packages with an available upgrade; never syncs or upgrades)
 - cleanup (remove orphaned dependency packages nothing needs anymore)
 - refresh
-- update
-- upgrade
+- update (read-only refresh-and-report of available updates, with a hint to run `upgrade`)
+- upgrade (full system upgrade)
 - backend auto-detection
 - dry-run mode
 
@@ -68,7 +69,7 @@ Specs
 
 - Specs live under `openspec/`.
 - archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
-- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, `openspec/specs/cleanup-command.md`, `openspec/specs/which-command.md`, and `openspec/specs/uses-command.md`.
+- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, `openspec/specs/update-command.md`, `openspec/specs/cleanup-command.md`, `openspec/specs/which-command.md`, and `openspec/specs/uses-command.md`.
 
 Install locally for development
 
@@ -89,8 +90,23 @@ archdown uses openssl
 archdown doctor
 archdown outdated
 archdown --dry-run cleanup
-archdown --dry-run update
+archdown update
 ```
+
+`archdown update` is always safe to run: it never installs, upgrades, or syncs
+the live package databases. With updates available it prints a colored report
+and a hint:
+
+```text
+Outdated packages
+-----------------
+ripgrep   14.1.1-1 -> 14.2.0-1
+fd        10.2.0-1 -> 10.3.0-1
+
+Run `archdown upgrade` to upgrade them.
+```
+
+On a current system it prints `Everything is up to date.`
 
 Managed packages and recent updates
 
@@ -114,9 +130,10 @@ Run tests
 
 Design notes
 
-- `update` and `upgrade` intentionally do the same thing.
-- `refresh` exists for people who explicitly want metadata sync only.
-- mutating commands (`install`, `uninstall`, `refresh`, `update`/`upgrade`, and `cleanup`) print a friendly completion line only after the backend exits successfully; failures and `--dry-run` previews never claim success.
+- `update` follows the Homebrew mental model: it only refreshes update knowledge and reports, while `upgrade` is what changes the system. The report is shared with `outdated`; `update` adds the closing `archdown upgrade` hint.
+- `update` refreshes safely: `checkupdates` works against a temporary database copy, and AUR helpers are queried in `-Qu` mode, so the real sync databases are never touched and no partial-upgrade window is opened.
+- `refresh` exists for people who explicitly want a live metadata sync only, and warns about the partial-upgrade risk.
+- mutating commands (`install`, `uninstall`, `refresh`, `upgrade`, and `cleanup`) print a friendly completion line only after the backend exits successfully; failures and `--dry-run` previews never claim success.
 - uninstall currently maps to `-Rns`, which is opinionated and may become configurable.
 - `doctor` is a human-readable backend explainer, not a machine interface.
 - default UX should move toward structured parsing and rendering over backend output.

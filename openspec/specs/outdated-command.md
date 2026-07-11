@@ -18,6 +18,11 @@ It does not accept filtering, sorting, or format flags. Global archdown options
 (such as `--backend` and `--dry-run`) still apply because they belong to
 archdown itself, not to this command.
 
+`archdown update` presents the same report through the same safe backend
+resolution, adding a closing hint pointing at `archdown upgrade` (see
+`update-command.md`). `outdated` stays the plain report with no follow-up
+suggestion.
+
 ## Read-only guarantee
 
 - `outdated` must only query update availability. It must never install,
