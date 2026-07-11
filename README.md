@@ -108,6 +108,9 @@ Run `archdown upgrade` to upgrade them.
 
 On a current system it prints `Everything is up to date.`
 
+Color follows archdown's usual auto-detection (honoring `NO_COLOR` and non-tty
+output); `archdown update --no-color` forces plain output.
+
 Managed packages and recent updates
 
 - `archdown install <pkg>` records the package as managed by archdown after a successful install.
