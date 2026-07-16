@@ -405,11 +405,13 @@ def test_main_refresh_and_update_confirm_after_success(monkeypatch, capsys):
 
     assert main(["--backend", "pacman", "refresh"]) == 0
     captured = capsys.readouterr()
-    assert "Package databases refreshed." in captured.out
-    assert "warning: refresh only syncs databases" in captured.err
+    assert "Package metadata refreshed." in captured.out
+    assert "does not upgrade packages" in captured.err
 
     assert main(["--backend", "pacman", "update"]) == 0
-    assert "System update completed." in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "Package metadata refreshed." in captured.out
+    assert "does not upgrade packages" in captured.err
 
 
 def test_run_outdated_renders_transitions(monkeypatch, capsys):
@@ -577,6 +579,18 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- which: yay -Qo <path>" in out
     assert "- uses: yay -Qi <pkg>" in out
     assert "- cleanup: yay -Qtdq | yay -Rns -" in out
+    assert "- update/refresh: yay -Sy" in out
+    assert "- upgrade: yay -Syu" in out
+
+
+def test_update_refreshes_metadata_without_upgrading(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"yay", "pacman"} else None)
+
+    assert main(["--backend", "yay", "--dry-run", "update"]) == 0
+    assert capsys.readouterr().out == "backend command: yay -Sy\n"
+
+    assert main(["--backend", "yay", "--dry-run", "upgrade"]) == 0
+    assert capsys.readouterr().out == "backend command: yay -Syu\n"
 
 
 def test_run_search_reports_no_matches_on_empty_output(monkeypatch, capsys):

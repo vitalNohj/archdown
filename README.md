@@ -35,7 +35,7 @@ How it works
 - falls back to `yay`
 - falls back to `pacman`
 - uses AUR-capable backends when available
-- keeps `update` as an alias of full-system `upgrade` because Arch partial-upgrade semantics are risky
+- uses Homebrew-style split semantics: `update` fetches package metadata and `upgrade` installs available upgrades
 
 Status
 
@@ -114,9 +114,11 @@ Run tests
 
 Design notes
 
-- `update` and `upgrade` intentionally do the same thing.
-- `refresh` exists for people who explicitly want metadata sync only.
-- mutating commands (`install`, `uninstall`, `refresh`, `update`/`upgrade`, and `cleanup`) print a friendly completion line only after the backend exits successfully; failures and `--dry-run` previews never claim success.
+- `update` refreshes package databases without upgrading installed packages.
+- `upgrade` performs the full-system upgrade.
+- `refresh` remains an alias for `update`.
+- Arch does not support partial upgrades: after refreshing metadata, prefer `archdown upgrade` before installing packages when updates are available.
+- mutating commands (`install`, `uninstall`, `update`/`refresh`, `upgrade`, and `cleanup`) print a friendly completion line only after the backend exits successfully; failures and `--dry-run` previews never claim success.
 - uninstall currently maps to `-Rns`, which is opinionated and may become configurable.
 - `doctor` is a human-readable backend explainer, not a machine interface.
 - default UX should move toward structured parsing and rendering over backend output.

@@ -470,9 +470,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("outdated", help="List packages with an available upgrade (read-only; does not sync or upgrade)")
     sub.add_parser("cleanup", help="Remove orphaned dependency packages nothing needs anymore")
-    sub.add_parser("refresh", help="Refresh package databases only")
+    sub.add_parser("refresh", help="Alias for update")
     sub.add_parser("upgrade", help="Upgrade the full system")
-    sub.add_parser("update", help="Alias for upgrade; safer than Homebrew-style split semantics on Arch")
+    sub.add_parser("update", help="Fetch the latest package metadata without upgrading")
     sub.add_parser("doctor", help="Show detected backend tooling and command mapping")
     return parser
 
@@ -501,8 +501,8 @@ def print_doctor(backend: Backend) -> None:
     print(f"- list: {' '.join(backend.list_installed)}")
     print(f"- outdated: {' '.join(resolve_outdated_command(backend))}")
     print(f"- cleanup: {' '.join(backend.orphans)} | {' '.join(backend.uninstall)} -")
-    print(f"- refresh: {' '.join(backend.refresh)}")
-    print(f"- upgrade/update: {' '.join(backend.upgrade)}")
+    print(f"- update/refresh: {' '.join(backend.refresh)}")
+    print(f"- upgrade: {' '.join(backend.upgrade)}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -537,11 +537,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_outdated(resolve_outdated_command(backend), dry_run=args.dry_run)
     if args.command == "cleanup":
         return run_cleanup(backend.orphans, backend.uninstall, dry_run=args.dry_run)
-    if args.command == "refresh":
-        print("warning: refresh only syncs databases. On Arch, full upgrades are usually safer.", file=sys.stderr)
-        return run_confirmed(backend.refresh, args.dry_run, "Package databases refreshed.")
-    if args.command in {"upgrade", "update"}:
-        return run_confirmed(backend.upgrade, args.dry_run, "System update completed.")
+    if args.command in {"update", "refresh"}:
+        print(
+            "warning: this refreshes package metadata only and does not upgrade packages. "
+            "On Arch, run 'archdown upgrade' before installing to avoid partial upgrades.",
+            file=sys.stderr,
+        )
+        return run_confirmed(backend.refresh, args.dry_run, "Package metadata refreshed.")
+    if args.command == "upgrade":
+        return run_confirmed(backend.upgrade, args.dry_run, "System upgrade completed.")
     if args.command == "doctor":
         print_doctor(backend)
         return 0

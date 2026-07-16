@@ -14,7 +14,9 @@ archdown is a user-friendly CLI wrapper for Arch package workflows. It is not a 
 
 - Use an available Arch backend such as `yay`, `paru`, or `pacman`.
 - Preserve real backend semantics for package operations.
-- Keep `update` and `upgrade` as aliases because partial-upgrade workflows are risky on Arch.
+- Use Homebrew-style split semantics: `update` refreshes package metadata without installing packages, while `upgrade` performs a full-system upgrade.
+- Keep `refresh` as an alias for `update`.
+- Document that Arch does not support partial upgrades and recommend upgrading before package installation after metadata is refreshed.
 
 ## Output philosophy
 
@@ -39,10 +41,10 @@ archdown is a user-friendly CLI wrapper for Arch package workflows. It is not a 
 
 ## Completion confirmations
 
-- Mutating commands (`install`, `uninstall`, `refresh`, `update`/`upgrade`, and the removal `cleanup` performs) should end with a clear, friendly one-line confirmation so the user knows the operation finished.
+- Mutating commands (`install`, `uninstall`, `update`/`refresh`, `upgrade`, and the removal `cleanup` performs) should end with a clear, friendly one-line confirmation so the user knows the operation finished.
 - A confirmation is printed only after the backend exits successfully (exit code `0`) and only for a real run. archdown must never claim success on a non-zero backend exit, and must preserve the backend's own output and stderr on failure.
 - `--dry-run` stays a preview: it prints the backend command it would run but must not print a completion confirmation, since nothing was executed.
-- Package confirmations name what changed, e.g. "Installed ripgrep." for one package or "Installed 2 packages: ripgrep, fd." for several; `refresh` and `update`/`upgrade` confirm the overall operation ("Package databases refreshed.", "System update completed.").
+- Package confirmations name what changed, e.g. "Installed ripgrep." for one package or "Installed 2 packages: ripgrep, fd." for several; `update`/`refresh` and `upgrade` confirm the overall operation ("Package metadata refreshed.", "System upgrade completed.").
 - Read-only structured commands (`search`, `info`, `which`, `uses`, `list`, `outdated`) do not add completion confirmations, and `doctor` stays an explicit diagnostic explainer.
 
 ## Fallback behavior
