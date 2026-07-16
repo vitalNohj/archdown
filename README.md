@@ -4,6 +4,8 @@ archdown is a friendly CLI wrapper around Arch Linux package tooling.
 
 Goal: make pacman/AUR workflows feel more like Homebrew without inventing a new package ecosystem.
 
+Current version: **0.2.0**. See the [changelog](https://github.com/vitalNohj/archdown/blob/main/CHANGELOG.md) for release history.
+
 Why this exists
 
 Arch users often bounce between Debian-based distros, macOS systems with Homebrew, and Arch. archdown aims to make Arch feel just as approachable day-to-day without giving up the power of `pacman`, `yay`, and the AUR.
@@ -27,7 +29,11 @@ archdown outdated
 archdown cleanup
 archdown update
 archdown upgrade
+archdown --version
 ```
+
+The shorter **ad** command is installed as an alias, so **ad update** and
+**archdown update** are equivalent.
 
 How it works
 
@@ -40,7 +46,7 @@ How it works
 
 Status
 
-This is an MVP scaffold.
+Version 0.2.0 is the first feature-complete development release.
 
 Implemented now:
 - install
@@ -63,7 +69,7 @@ Implemented now:
 
 Not implemented yet:
 - install prompts/wrappers for missing helpers
-- release automation
+- publishing to AUR/PyPI
 
 Specs
 

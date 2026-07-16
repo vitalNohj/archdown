@@ -36,3 +36,11 @@ Initial priorities:
 2. improve uninstall semantics and configurability
 3. enrich info output and backend introspection
 4. package and release strategy
+
+Release checklist:
+1. Update `src/archdown/_version.py` and `CHANGELOG.md`.
+2. Run `.venv/bin/pytest -q` and `.venv/bin/python -m build`.
+3. Merge the release commit into `main`.
+4. Push an annotated `vX.Y.Z` tag. The release workflow builds the wheel and
+   source distribution, smoke-tests both console commands, and publishes the
+   GitHub release artifacts.

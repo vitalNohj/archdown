@@ -4,6 +4,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - Spec-first project: update or add the relevant spec under `openspec/specs/` before or alongside behavior changes, and keep code and specs agreeing. Workflow and spec index: `openspec/README.md`; contribution rules: `CONTRIBUTING.md`.
 - Dev loop: `python -m venv .venv && .venv/bin/pip install -e '.[dev]'`, then `.venv/bin/pytest -q`. Tests never touch real package managers — they monkeypatch `subprocess.run` and `shutil.which` (see `tests/test_cli.py`).
+- Release version source: `src/archdown/_version.py`. Follow the checklist in `CONTRIBUTING.md`; pushing a matching `vX.Y.Z` tag publishes GitHub release artifacts.
 - Safety invariant: only `upgrade` (and `install`/`uninstall`/`cleanup`/`refresh`) may mutate the system. `update`, `outdated`, `which`, `uses`, `list`, `search`, `info` are read-only and must never run a bare `-Sy` sync against the live databases (Arch partial-upgrade footgun; see `openspec/specs/update-command.md` and `outdated-command.md`).
 - Add durable project-specific notes here as they are discovered through real work.
 

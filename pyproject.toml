@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "archdown"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A friendly Homebrew-style wrapper over pacman/AUR helpers for Arch Linux"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,12 @@ classifiers = [
   "Topic :: System :: Systems Administration"
 ]
 
+[project.urls]
+Homepage = "https://github.com/vitalNohj/archdown"
+Repository = "https://github.com/vitalNohj/archdown"
+Issues = "https://github.com/vitalNohj/archdown/issues"
+Changelog = "https://github.com/vitalNohj/archdown/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 dev = [
   "build>=1.2",
@@ -31,9 +37,13 @@ dev = [
 
 [project.scripts]
 archdown = "archdown.cli:main"
+ad = "archdown.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = { attr = "archdown._version.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
