@@ -223,7 +223,17 @@ def _surface_outdated_failure(completed: subprocess.CompletedProcess[str]) -> in
     return completed.returncode
 
 
-def run_outdated(cmd: Sequence[str], *, dry_run: bool) -> int:
+UPGRADE_HINT = "Run `archdown upgrade` to upgrade them."
+
+
+def _print_upgrade_hint(enabled: bool) -> None:
+    # The hint accompanies an actual list of upgradable packages; an up-to-date
+    # system has nothing to point `archdown upgrade` at.
+    if enabled:
+        print(f"\n{UPGRADE_HINT}")
+
+
+def run_outdated(cmd: Sequence[str], *, dry_run: bool, color: bool | None = None, upgrade_hint: bool = False) -> int:
     pretty = " ".join(cmd)
     if dry_run:
         print(f"backend command: {pretty}")
@@ -236,27 +246,30 @@ def run_outdated(cmd: Sequence[str], *, dry_run: bool) -> int:
         # checkupdates exit codes: 0 => updates available, 2 => nothing to
         # upgrade, anything else => a real failure.
         if completed.returncode == 2:
-            print(render_outdated_packages([], color=None))
+            print(render_outdated_packages([], color=color))
             return 0
         if completed.returncode != 0:
             return _surface_outdated_failure(completed)
         packages = parse_outdated_output(output)
         if packages:
-            print(render_outdated_packages(packages, color=None))
+            print(render_outdated_packages(packages, color=color))
+            _print_upgrade_hint(upgrade_hint)
         elif output.strip():
             print(output, end="")
+            _print_upgrade_hint(upgrade_hint)
         else:
-            print(render_outdated_packages([], color=None))
+            print(render_outdated_packages([], color=color))
         return 0
 
     packages = parse_outdated_output(output)
     if packages:
-        print(render_outdated_packages(packages, color=None))
+        print(render_outdated_packages(packages, color=color))
+        _print_upgrade_hint(upgrade_hint)
         return 0
     if output.strip():
         return _surface_outdated_failure(completed)
     if completed.returncode in (0, 1) and not completed.stderr:
-        print(render_outdated_packages([], color=None))
+        print(render_outdated_packages([], color=color))
         return 0
     return _surface_outdated_failure(completed)
 
@@ -471,8 +484,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("outdated", help="List packages with an available upgrade (read-only; does not sync or upgrade)")
     sub.add_parser("cleanup", help="Remove orphaned dependency packages nothing needs anymore")
     sub.add_parser("refresh", help="Refresh package databases only")
-    sub.add_parser("upgrade", help="Upgrade the full system")
-    sub.add_parser("update", help="Alias for upgrade; safer than Homebrew-style split semantics on Arch")
+    sub.add_parser("upgrade", help="Upgrade the full system (the only verb that installs upgrades)")
+    update = sub.add_parser("update", help="Safely check for available updates and report them (read-only; use `upgrade` to install)")
+    update.add_argument("--no-color", action="store_true", help="Disable colored output")
     sub.add_parser("doctor", help="Show detected backend tooling and command mapping")
     return parser
 
@@ -502,7 +516,8 @@ def print_doctor(backend: Backend) -> None:
     print(f"- outdated: {' '.join(resolve_outdated_command(backend))}")
     print(f"- cleanup: {' '.join(backend.orphans)} | {' '.join(backend.uninstall)} -")
     print(f"- refresh: {' '.join(backend.refresh)}")
-    print(f"- upgrade/update: {' '.join(backend.upgrade)}")
+    print(f"- update: {' '.join(resolve_outdated_command(backend))} (read-only check; use upgrade to install)")
+    print(f"- upgrade: {' '.join(backend.upgrade)}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -535,12 +550,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.command == "outdated":
         return run_outdated(resolve_outdated_command(backend), dry_run=args.dry_run)
+    if args.command == "update":
+        # Homebrew-style update: refresh update knowledge via the safe outdated
+        # check (never a live -Sy sync, never an upgrade) and report the result.
+        return run_outdated(
+            resolve_outdated_command(backend),
+            dry_run=args.dry_run,
+            color=False if args.no_color else None,
+            upgrade_hint=True,
+        )
     if args.command == "cleanup":
         return run_cleanup(backend.orphans, backend.uninstall, dry_run=args.dry_run)
     if args.command == "refresh":
         print("warning: refresh only syncs databases. On Arch, full upgrades are usually safer.", file=sys.stderr)
         return run_confirmed(backend.refresh, args.dry_run, "Package databases refreshed.")
-    if args.command in {"upgrade", "update"}:
+    if args.command == "upgrade":
         return run_confirmed(backend.upgrade, args.dry_run, "System update completed.")
     if args.command == "doctor":
         print_doctor(backend)

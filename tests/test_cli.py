@@ -134,6 +134,16 @@ def test_parser_accepts_info_doctor_and_search_options():
     parsed = parser.parse_args(["cleanup"])
     assert parsed.command == "cleanup"
 
+    parsed = parser.parse_args(["update", "--no-color"])
+    assert parsed.command == "update"
+    assert parsed.no_color is True
+
+
+def test_update_subparser_rejects_positionals():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["update", "ripgrep"])
+
 
 def test_outdated_subparser_rejects_flags_and_positionals():
     parser = build_parser()
@@ -328,9 +338,12 @@ def test_resolve_outdated_command_prefers_checkupdates_only_for_pacman(monkeypat
     monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name == "checkupdates" else None)
     assert resolve_outdated_command(make_backend("pacman")) == ["checkupdates"]
     assert resolve_outdated_command(make_backend("yay")) == ["yay", "-Qu"]
+    assert resolve_outdated_command(make_backend("paru")) == ["paru", "-Qu"]
 
     monkeypatch.setattr("shutil.which", lambda name: None)
     assert resolve_outdated_command(make_backend("pacman")) == ["pacman", "-Qu"]
+    assert resolve_outdated_command(make_backend("yay")) == ["yay", "-Qu"]
+    assert resolve_outdated_command(make_backend("paru")) == ["paru", "-Qu"]
 
 
 def test_run_confirmed_prints_success_only_after_success(monkeypatch, capsys):
@@ -399,7 +412,7 @@ def test_run_uninstall_confirms_removed_package_after_success(monkeypatch, tmp_p
     assert json.loads(state_path.read_text())["packages"] == []
 
 
-def test_main_refresh_and_update_confirm_after_success(monkeypatch, capsys):
+def test_main_refresh_and_upgrade_confirm_after_success(monkeypatch, capsys):
     monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name == "pacman" else None)
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0))
 
@@ -408,8 +421,91 @@ def test_main_refresh_and_update_confirm_after_success(monkeypatch, capsys):
     assert "Package databases refreshed." in captured.out
     assert "warning: refresh only syncs databases" in captured.err
 
+    assert main(["--backend", "pacman", "upgrade"]) == 0
+    out = capsys.readouterr().out
+    assert "backend command: sudo pacman -Syu" in out
+    assert "System update completed." in out
+
+
+def test_main_update_reports_outdated_without_upgrading(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"pacman", "checkupdates"} else None)
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "ripgrep 14.1.1-1 -> 14.2.0-1\nfd 10.2.0-1 -> 10.3.0-1\n", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
     assert main(["--backend", "pacman", "update"]) == 0
-    assert "System update completed." in capsys.readouterr().out
+    out = capsys.readouterr().out
+    # update only runs the safe temp-db check: no -Sy sync, no -Syu upgrade, no sudo.
+    assert calls == [["checkupdates"]]
+    assert "Outdated packages" in out
+    assert "ripgrep" in out
+    assert "14.1.1-1 -> 14.2.0-1" in out
+    assert "Run `archdown upgrade` to upgrade them." in out
+    assert "System update completed." not in out
+
+
+def test_main_update_never_runs_sync_or_upgrade_on_aur_backends(monkeypatch, capsys):
+    for helper in ("paru", "yay"):
+        monkeypatch.setattr("shutil.which", lambda name, helper=helper: f"/usr/bin/{name}" if name == helper else None)
+        calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 0, "ripgrep 14.1.1-1 -> 14.2.0-1\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        assert main(["--backend", helper, "update"]) == 0
+        out = capsys.readouterr().out
+        assert calls == [[helper, "-Qu"]]
+        assert "Run `archdown upgrade` to upgrade them." in out
+
+
+def test_main_update_reports_up_to_date_without_hint(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"pacman", "checkupdates"} else None)
+    # checkupdates exits 2 when there is nothing to upgrade.
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 2, "", ""))
+
+    assert main(["--backend", "pacman", "update"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == "Everything is up to date."
+    assert "archdown upgrade" not in out
+
+
+def test_main_update_colors_report_on_tty_and_respects_no_color(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"pacman", "checkupdates"} else None)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "ripgrep 14.1.1-1 -> 14.2.0-1\n", ""),
+    )
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True, raising=False)
+
+    assert main(["--backend", "pacman", "update"]) == 0
+    assert "\033[" in capsys.readouterr().out
+
+    assert main(["--backend", "pacman", "update", "--no-color"]) == 0
+    assert "\033[" not in capsys.readouterr().out
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert main(["--backend", "pacman", "update"]) == 0
+    assert "\033[" not in capsys.readouterr().out
+
+
+def test_main_update_dry_run_prints_command_without_executing(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"pacman", "checkupdates"} else None)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called in dry-run")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    assert main(["--backend", "pacman", "--dry-run", "update"]) == 0
+    assert capsys.readouterr().out.strip() == "backend command: checkupdates"
 
 
 def test_run_outdated_renders_transitions(monkeypatch, capsys):
@@ -421,6 +517,9 @@ def test_run_outdated_renders_transitions(monkeypatch, capsys):
     assert "Outdated packages" in out
     assert "ripgrep" in out
     assert "14.1.1-1 -> 14.2.0-1" in out
+    # The plain outdated report carries no follow-up suggestion; that hint
+    # belongs to `archdown update`.
+    assert "archdown upgrade" not in out
 
 
 def test_run_outdated_reports_up_to_date_on_empty_output(monkeypatch, capsys):
@@ -577,6 +676,10 @@ def test_doctor_prints_selected_backend_and_mappings(monkeypatch, capsys):
     assert "- which: yay -Qo <path>" in out
     assert "- uses: yay -Qi <pkg>" in out
     assert "- cleanup: yay -Qtdq | yay -Rns -" in out
+    # update and upgrade are distinct verbs now: update is the read-only check.
+    assert "- update: yay -Qu (read-only check; use upgrade to install)" in out
+    assert "- upgrade: yay -Syu" in out
+    assert "upgrade/update" not in out
 
 
 def test_run_search_reports_no_matches_on_empty_output(monkeypatch, capsys):
