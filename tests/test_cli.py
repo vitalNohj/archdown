@@ -3,6 +3,7 @@ import subprocess
 
 import pytest
 
+from archdown import __version__
 from archdown.cli import (
     build_parser,
     main,
@@ -22,6 +23,14 @@ from archdown.cli import (
     run_which,
     select_backend,
 )
+
+
+def test_parser_reports_package_version(capsys):
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(["--version"])
+
+    assert exc.value.code == 0
+    assert capsys.readouterr().out == f"archdown {__version__}\n"
 
 
 def test_make_backend_yay_mapping():

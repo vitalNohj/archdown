@@ -8,6 +8,7 @@ import sys
 from dataclasses import dataclass
 from typing import Sequence
 
+from archdown._version import __version__
 from archdown.info import parse_info_output, render_package_info
 from archdown.listing import parse_list_output, parse_outdated_output, render_installed_packages, render_outdated_packages
 from archdown.search import parse_search_output, render_search_results
@@ -441,6 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="archdown",
         description="A friendly Homebrew-style wrapper over Arch package tooling.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--dry-run", action="store_true", help="Print the backend command without executing it")
     parser.add_argument("--backend", choices=["auto", "paru", "yay", "pacman"], default="auto", help="Force a backend")
 
