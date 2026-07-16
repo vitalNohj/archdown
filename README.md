@@ -1,164 +1,279 @@
-# archdown
+<p align="center">
+  <img src="assets/archdown-logo.svg" alt="archdown — Arch power. Friendly words." width="680">
+</p>
 
-archdown is a friendly CLI wrapper around Arch Linux package tooling.
+<p align="center">
+  <a href="https://github.com/vitalNohj/archdown/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/vitalNohj/archdown/ci.yml?branch=main&amp;style=flat-square&amp;label=CI&amp;logo=github"></a>
+  <a href="https://github.com/vitalNohj/archdown/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/vitalNohj/archdown?style=flat-square&amp;logo=github"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white">
+  <img alt="Arch Linux" src="https://img.shields.io/badge/Arch_Linux-native-1793D1?style=flat-square&amp;logo=archlinux&amp;logoColor=white">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-22C55E?style=flat-square"></a>
+  <a href="CONTRIBUTING.md"><img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-F59E0B?style=flat-square"></a>
+</p>
 
-Goal: make pacman/AUR workflows feel more like Homebrew without inventing a new package ecosystem.
+<p align="center">
+  <strong>A friendly command line for everyday Arch Linux package management.</strong>
+  <br>
+  Familiar words in front. Real <code>paru</code>, <code>yay</code>, and <code>pacman</code> underneath.
+</p>
 
-Current version: **0.2.0**. See the [changelog](https://github.com/vitalNohj/archdown/blob/main/CHANGELOG.md) for release history.
+---
 
-Why this exists
+## Arch without the memory test
 
-Arch users often bounce between Debian-based distros, macOS systems with Homebrew, and Arch. archdown aims to make Arch feel just as approachable day-to-day without giving up the power of `pacman`, `yay`, and the AUR.
+Arch is powerful. Everyday package management should not feel like a test of
+how many flags you can remember.
 
-archdown is meant to be that missing comfort layer: familiar verbs like `install`, `uninstall`, `search`, and `update`, backed by the real Arch ecosystem instead of a separate repository or package manager.
+I built Archdown to smooth out my own Arch experience. I wanted to type what I
+meant—<code>search</code>, <code>install</code>, <code>update</code>,
+<code>upgrade</code>—and still keep the package ecosystem and control that made
+me choose Arch in the first place.
 
-Examples:
+> **The mission:** make Arch friendlier without hiding Arch, replacing its
+> tools, or inventing another package ecosystem.
 
-```bash
-archdown install neovim
-archdown uninstall neovim
-archdown search terminal emulator
-archdown info neovim
-archdown which rg
-archdown uses openssl
+Archdown is a small compatibility layer for humans. It chooses an available
+backend, runs the real Arch tooling, and turns common workflows into memorable
+commands with clearer output and safer defaults.
+
+## Start in 30 seconds
+
+Archdown is not in the AUR or PyPI yet. Install the current release directly
+with [uv](https://docs.astral.sh/uv/):
+
+~~~bash
+sudo pacman -S --needed uv
+uv tool install "git+https://github.com/vitalNohj/archdown@v0.2.0"
 archdown doctor
-archdown list
-archdown list --group managed
-archdown adopt herdr
-archdown outdated
-archdown cleanup
+~~~
+
+Then try the everyday loop:
+
+~~~bash
+archdown search terminal emulator
+archdown install neovim
 archdown update
 archdown upgrade
-archdown --version
-```
+~~~
 
-The shorter **ad** command is installed as an alias, so **ad update** and
-**archdown update** are equivalent.
+Prefer something shorter? The installed <code>ad</code> command is a complete
+alias:
 
-How it works
+~~~bash
+ad search ripgrep
+ad update
+~~~
 
-- prefers `paru` if installed
-- falls back to `yay`
-- falls back to `pacman`
-- uses AUR-capable backends when available
-- `update` is a safe, read-only Homebrew-style check: it refreshes update knowledge via `checkupdates`' temporary database copy (or the AUR helper's query mode) and reports what could be upgraded, without touching the live sync databases
-- `upgrade` is the only verb that actually installs upgrades, and it always does a full `-Syu`, because partial upgrades are risky on Arch
+> [!IMPORTANT]
+> <code>archdown update</code> is read-only. It reports available updates but
+> never installs them. Only <code>archdown upgrade</code> performs the full
+> system upgrade.
 
-Status
+## What feels different
 
-Version 0.2.0 is the first feature-complete development release.
+| Archdown gives you | What that means |
+|---|---|
+| **Intent-first commands** | Remember <code>install</code>, not a collection of flags. |
+| **Arch-native behavior** | Packages still come from official repositories and the AUR. |
+| **Backend awareness** | Archdown prefers <code>paru</code>, then <code>yay</code>, then <code>pacman</code>. |
+| **Safer update semantics** | Checking for updates and installing them are separate, explicit actions. |
+| **Human output** | Results are grouped, aligned, color-aware, and clear when nothing was found. |
+| **No new daemon or database** | Archdown remains a lightweight wrapper over tools you already trust. |
 
-Implemented now:
-- install
-- uninstall
-- search
-- info
-- which (read-only lookup of which package owns a command or file)
-- uses (read-only lookup of what still depends on a package)
-- doctor
-- list with structured Libraries / Applications / User installed sections
-- adopt existing packages into archdown's managed package state
-- recently-updated markers for tracked packages after external upgrades
-- outdated (read-only structured list of packages with an available upgrade; never syncs or upgrades)
-- cleanup (remove orphaned dependency packages nothing needs anymore)
-- refresh
-- update (read-only refresh-and-report of available updates, with a hint to run `upgrade`)
-- upgrade (full system upgrade)
-- backend auto-detection
-- dry-run mode
+## The command guide
 
-Not implemented yet:
-- install prompts/wrappers for missing helpers
-- publishing to AUR/PyPI
+| Command | Purpose | Package-system effect |
+|---|---|---|
+| <code>archdown search &lt;terms&gt;</code> | Search official repositories and the AUR | Read-only |
+| <code>archdown info &lt;package&gt;</code> | Show package details | Read-only |
+| <code>archdown which &lt;command-or-path&gt;</code> | Find the package that owns a command or file | Read-only |
+| <code>archdown uses &lt;package&gt;</code> | Show what still depends on a package | Read-only |
+| <code>archdown list</code> | Browse explicitly installed packages | Read-only packages; updates local tracking |
+| <code>archdown outdated</code> | List available upgrades | Read-only |
+| <code>archdown update</code> | Check and report available updates | Read-only |
+| <code>archdown install &lt;package...&gt;</code> | Install packages | Changes packages |
+| <code>archdown uninstall &lt;package...&gt;</code> | Remove packages and unused dependencies | Changes packages |
+| <code>archdown cleanup</code> | Preview and remove orphaned dependencies | Changes packages after preview |
+| <code>archdown upgrade</code> | Perform a full system upgrade | Changes packages |
+| <code>archdown refresh</code> | Explicitly sync live package databases | Changes package metadata; warns first |
+| <code>archdown adopt &lt;package...&gt;</code> | Add existing packages to Archdown tracking | Local bookkeeping only |
+| <code>archdown doctor</code> | Explain detected tools and command mappings | Read-only |
 
-Specs
+Most package-changing commands support the global <code>--dry-run</code> flag:
 
-- Specs live under `openspec/`.
-- archdown is being built as a parsed UX wrapper over Arch backends, not a thin passthrough of raw backend output.
-- Current command specs include `openspec/specs/search-command.md`, `openspec/specs/list-command.md`, `openspec/specs/outdated-command.md`, `openspec/specs/update-command.md`, `openspec/specs/cleanup-command.md`, `openspec/specs/which-command.md`, and `openspec/specs/uses-command.md`.
+~~~bash
+archdown --dry-run install ripgrep
+archdown --dry-run cleanup
+archdown --backend pacman --dry-run upgrade
+~~~
 
-Install locally for development
+## A visible safety contract
 
-```bash
+Archdown is deliberately clear about what can change your system.
+
+### Safe to explore
+
+<code>search</code>, <code>info</code>, <code>which</code>,
+<code>uses</code>, <code>list</code>, <code>outdated</code>,
+<code>update</code>, and <code>doctor</code> never install, remove, or upgrade
+packages.
+
+### Explicitly mutating
+
+<code>install</code>, <code>uninstall</code>, <code>cleanup</code>,
+<code>refresh</code>, and <code>upgrade</code> are the commands that can change
+package or live database state. They expose the backend command, honor dry-run
+where applicable, and only print a success message after the backend succeeds.
+
+This split matters on Arch: a bare live database sync can create a
+partial-upgrade window. That is why <code>update</code> uses safe query paths
+and <code>upgrade</code> remains the one obvious verb for a full
+<code>-Syu</code>.
+
+## Update should feel calm
+
+~~~text
+$ archdown update
+Outdated packages
+-----------------
+firefox   152.0-1       -> 153.0-1
+linux     6.18.4.arch1  -> 6.18.5.arch1
+ripgrep   14.1.1-1      -> 14.2.0-1
+
+Run archdown upgrade to upgrade them.
+~~~
+
+On a current system:
+
+~~~text
+$ archdown update
+Everything is up to date.
+~~~
+
+Color follows terminal capabilities and respects <code>NO_COLOR</code>.
+Use <code>archdown update --no-color</code> when plain output is preferable.
+
+## Real Arch tools, not a replacement ecosystem
+
+Archdown automatically selects the first backend it finds:
+
+~~~text
+paru  →  yay  →  pacman
+~~~
+
+Run <code>archdown doctor</code> at any time to see what was detected and the
+exact backend commands Archdown maps to. You can also force a backend:
+
+~~~bash
+archdown --backend pacman search ripgrep
+archdown --backend yay update
+~~~
+
+Archdown does not replace pacman, an AUR helper, or the Arch Wiki. It gives
+their most common workflows a smaller, friendlier surface.
+
+## Project status
+
+The current release is
+[v0.2.0](https://github.com/vitalNohj/archdown/releases/tag/v0.2.0), the first
+feature-complete development release.
+
+### Working today
+
+- Friendly install, uninstall, search, info, update, and upgrade workflows
+- Official repository and AUR-aware backend selection
+- Read-only outdated, ownership, and reverse-dependency queries
+- Orphan cleanup with a visible preview
+- Managed-package adoption and recently-updated markers
+- Friendly empty states, success confirmations, color, and dry-run support
+- Tested on Python 3.10, 3.11, and 3.12
+
+### Where the project can grow
+
+- [ ] Publish maintained AUR and PyPI packages
+- [ ] Add shell completions
+- [ ] Add structured JSON output
+- [ ] Guide users when a preferred backend is missing
+- [ ] Enrich package information and dependency views
+- [ ] Keep sanding down rough Arch workflows as real users find them
+
+Have an idea that would make Arch feel kinder? Please
+[open an issue](https://github.com/vitalNohj/archdown/issues).
+
+## Frequently asked questions
+
+<details>
+<summary><strong>Does Archdown replace pacman, yay, or paru?</strong></summary>
+
+No. Archdown calls the real backend tools. It is a user-experience layer, not a
+new package manager or repository.
+
+</details>
+
+<details>
+<summary><strong>Is <code>archdown update</code> safe?</strong></summary>
+
+Yes. It is read-only and never runs an upgrade or a bare live
+<code>-Sy</code>. It reports what can be upgraded and points you to the
+explicit <code>archdown upgrade</code> command.
+
+</details>
+
+<details>
+<summary><strong>Does it support the AUR?</strong></summary>
+
+Yes. Archdown uses <code>paru</code> or <code>yay</code> when available and
+falls back to <code>pacman</code> for official repositories.
+
+</details>
+
+<details>
+<summary><strong>Why not just memorize the backend flags?</strong></summary>
+
+You absolutely can—and Archdown will never take that option away. This project
+exists for people who would rather remember their intention than the spelling
+of every routine operation.
+
+</details>
+
+<details>
+<summary><strong>Is this an official Arch Linux project?</strong></summary>
+
+No. Archdown is an independent community project and is not affiliated with or
+endorsed by Arch Linux.
+
+</details>
+
+## A project that welcomes people
+
+Archdown is meant to make Arch more approachable, and the project should feel
+approachable too. New contributors are welcome. You do not need to be a package
+manager expert to improve an error message, document a confusing workflow,
+write a test, or share the friction you hit.
+
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release loop.
+- Browse the behavior-first specs in [openspec/](openspec/).
+- Report bugs and propose ideas in
+  [GitHub Issues](https://github.com/vitalNohj/archdown/issues).
+- Check the [changelog](CHANGELOG.md) to see how the project is evolving.
+
+### Local development
+
+~~~bash
+git clone https://github.com/vitalNohj/archdown.git
 cd archdown
 python -m venv .venv
 .venv/bin/pip install -e '.[dev]'
-```
-
-Try commands safely
-
-```bash
-archdown --dry-run install ripgrep
-archdown --dry-run search browser
-archdown --dry-run info ripgrep
-archdown which rg
-archdown uses openssl
-archdown doctor
-archdown outdated
-archdown --dry-run cleanup
-archdown update
-```
-
-`archdown update` is always safe to run: it never installs, upgrades, or syncs
-the live package databases. With updates available it prints a colored report
-and a hint:
-
-```text
-Outdated packages
------------------
-ripgrep   14.1.1-1 -> 14.2.0-1
-fd        10.2.0-1 -> 10.3.0-1
-
-Run `archdown upgrade` to upgrade them.
-```
-
-On a current system it prints `Everything is up to date.`
-
-Color follows archdown's usual auto-detection (honoring `NO_COLOR` and non-tty
-output); `archdown update --no-color` forces plain output.
-
-Managed packages and recent updates
-
-- `archdown install <pkg>` records the package as managed by archdown after a successful install.
-- `archdown adopt <pkg>` marks an already-installed package as managed by archdown.
-- `archdown list` stores the last seen installed version for managed packages.
-- If a managed package changes version outside archdown, the next structured `archdown list` marks it inline:
-
-```text
-herdr (Recently Updated 0.7.0-1 -> 0.7.1-1)
-v 0.7.1-1
-```
-
-- `archdown list --raw` stays a backend passthrough and does not update archdown's managed version state.
-
-Run tests
-
-```bash
 .venv/bin/pytest -q
-```
+~~~
 
-Design notes
+The test suite mocks package backends; it never installs, removes, or upgrades
+real packages.
 
-- `update` follows the Homebrew mental model: it only refreshes update knowledge and reports, while `upgrade` is what changes the system. The report is shared with `outdated`; `update` adds the closing `archdown upgrade` hint.
-- `update` refreshes safely: `checkupdates` works against a temporary database copy, and AUR helpers are queried in `-Qu` mode, so the real sync databases are never touched and no partial-upgrade window is opened.
-- `refresh` exists for people who explicitly want a live metadata sync only, and warns about the partial-upgrade risk.
-- mutating commands (`install`, `uninstall`, `refresh`, `upgrade`, and `cleanup`) print a friendly completion line only after the backend exits successfully; failures and `--dry-run` previews never claim success.
-- uninstall currently maps to `-Rns`, which is opinionated and may become configurable.
-- `doctor` is a human-readable backend explainer, not a machine interface.
-- default UX should move toward structured parsing and rendering over backend output.
-- `list` separates package browsing into Homebrew-inspired sections: Libraries, Applications, and User installed.
-- `User installed` means packages tracked by archdown, either installed through `archdown install` or adopted with `archdown adopt`.
-- Structured `list` uses tracked packages to surface version changes caused by external tools like `yay` or `pacman`.
+## License
 
-Roadmap ideas
+Archdown is available under the [MIT License](LICENSE).
 
-1. better UX and help text
-2. richer `archdown info <pkg>` output
-3. JSON output mode
-4. shell completions
-5. test suite expansion
-6. packaging for AUR/PyPI
-
-Name availability research
-
-`archdown` already appears in a few unrelated public repositories. It also appeared free in the Arch package search, AUR search, PyPI, npm, and crates.io at the time this repo was created. So the name is usable, but not globally unique enough to assume zero collisions.
+<p align="center">
+  <strong>Made on Arch, for people who want to enjoy Arch.</strong>
+</p>
